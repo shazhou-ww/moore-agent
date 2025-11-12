@@ -104,6 +104,42 @@ type Effect =
 - **状态写入**：订阅 Moorex 的 `state-updated` 事件，将最新 `AgentState` 推入串行持久化队列，由单一 worker 依次调用 HStore，确保写入顺序与状态演进一致。
 - **重启恢复**：启动时直接从 HStore 读取最新状态快照，恢复为初始 `AgentState`。
 
+## 依赖使用约定
+
+- **moorex**：参考 npm Readme 使用 `createMoorex(definition)` 构建状态机；`definition` 中包含 `initialState`, `transition(signal)(state)`, `effectsAt(state)` 与 `runEffect(effect)` 等纯函数；`agent.dispatch(signal)` 返回异步 `Promise<void>` 并触发 `agent.on(event)` 订阅的生命周期事件。为保持函数长度不超过 50 行，`transition`、`effectsAt` 分拆至 `src/state/transition.ts`、`src/state/effects.ts`。
+- **@hstore/core**：借助 `await createStore({ schema, adapter, hashFn })` 生成存储实例（`schema` 由 zod 描述 `AgentState` 结构，`hashFn` 推荐 `murmurhash` 实现）；使用 `await store.head()` 或 `await store.get(hash)` 恢复最新快照，`await store.commit(snapshot)` 追加序列化的 `AgentState`；操作流程与 npm Quick Start 一致。
+- **@hstore/leveldb-adapter**：遵循 npm Readme 通过 `await createLevelAdapter({ location, createIfMissing, compression })` 构建 LevelDB 适配器；`location` 由 `src/config/defaults.ts` 提供，可选项透传给 `classic-level`；初始化后注入 `createStore({ adapter })`，并在进程关闭钩子或测试清理阶段调用 `await adapter.close()` / `await adapter.clear()`。
+
+## 代码结构规划
+
+- **类型定义层**
+  - `src/types/messages.ts`：集中维护 `BaseMessage` 及三类 signal 的 `type` 定义，保留纯数据结构。
+  - `src/types/state.ts`：定义 `AgentState`、派生选择器类型与 `Effect` 联合类型，供全局复用。
+- **状态机层（Moorex）**
+  - `src/state/definition.ts`：导出 `createAgentDefinition(deps)`，组合 `initialState`、`transition`、`effectsAt`。
+  - `src/state/transition.ts`：实现消息插入、工具 fulfill、待发送窗口等纯函数，按 concern 拆分成 ≤50 行的辅助函数。
+  - `src/state/effects.ts`：根据状态推导 `call-llm` / `call-tool` 列表，保持纯函数。
+  - `src/state/machine.ts`：封装 `createMoorex(definition)` 并暴露 `createAgentMachine(deps)`，用于 agent 编排层。
+- **副作用运行时**
+  - `src/runtime/effects.ts`：根据 `Effect.kind` 调度 LLM 与工具执行，返回 `start/cancel` 函数，保持无状态。
+  - `src/runtime/llm.ts`、`src/runtime/tools.ts`：适配具体调用策略，默认导出函数式工厂以便注入。
+- **持久化层**
+  - `src/persistence/adapter.ts`：利用 `createLevelAdapter` 创建共享适配器，读取配置后按需初始化/关闭。
+  - `src/persistence/store.ts`：封装 `createStore`、`store.head`、`store.commit` 等操作，提供 `loadLatestState`、`appendState`。
+  - `src/persistence/queue.ts`：实现串行写入队列，确保状态快照按事件顺序持久化。
+- **Agent 编排层**
+  - `src/agent/index.ts`：导出 `createAgent({ systemPrompt, tools, persistence })`，协调状态机、运行时和持久化；内部以函数式组合保持高可读性。
+  - `src/agent/events.ts`：定义事件类型与订阅工具，包装 Moorex `agent.on` 输出，供上层消费。
+- **工具库**
+  - `src/utils/id.ts`：UUID / key 生成器。
+  - `src/utils/time.ts`：时间戳辅助函数。
+  - `src/utils/serialize.ts`：集中处理状态序列化/反序列化逻辑。
+- **入口与示例**
+  - `src/index.ts`：导出公共 API（类型、`createAgent`）。
+  - `examples/basic-agent.ts`：演示初始化、dispatch、重启恢复流程。
+  - 后续在 `tests/` 添加针对 `transition`、`effectsAt`、持久化的单元测试。
+- **模块依赖关系**：`src/agent/index.ts` 负责整合 Moorex 状态机与 HStore 持久化，启动时先 `store.get`（若支持 `store.head` 亦可优先使用）恢复状态，再监听 `machine.dispatch` 输出的状态更新队列，依次 `store.set` 或 `store.append` 写入；副作用执行封装在 `src/runtime/effects.ts`，与状态机通过纯数据协议交互。
+
 ## 下一步任务
 
 - 明确 Agent 框架的初始化协议：系统 prompt、工具列表等均作为创建参数传入，框架本身不预设具体实现。
