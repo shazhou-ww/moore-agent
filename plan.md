@@ -109,6 +109,7 @@ type Effect =
 - **moorex**：参考 npm Readme 使用 `createMoorex(definition)` 构建状态机；`definition` 中包含 `initialState`, `transition(signal)(state)`, `effectsAt(state)` 与 `runEffect(effect)` 等纯函数；`agent.dispatch(signal)` 返回异步 `Promise<void>` 并触发 `agent.on(event)` 订阅的生命周期事件。为保持函数长度不超过 50 行，`transition`、`effectsAt` 分拆至 `src/state/transition.ts`、`src/state/effects.ts`。
 - **@hstore/core**：借助 `await createStore({ schema, adapter, hashFn })` 生成存储实例（`schema` 由 zod 描述 `AgentState` 结构，`hashFn` 推荐 `murmurhash` 实现）；使用 `await store.head()` 或 `await store.get(hash)` 恢复最新快照，`await store.commit(snapshot)` 追加序列化的 `AgentState`；操作流程与 npm Quick Start 一致。
 - **@hstore/leveldb-adapter**：遵循 npm Readme 通过 `await createLevelAdapter({ location, createIfMissing, compression })` 构建 LevelDB 适配器；`location` 由 `src/config/defaults.ts` 提供，可选项透传给 `classic-level`；初始化后注入 `createStore({ adapter })`，并在进程关闭钩子或测试清理阶段调用 `await adapter.close()` / `await adapter.clear()`。
+- **OpenAI 官方 SDK**：在 `src/runtime/llm.ts` 中使用 `openai` 包提供的 `OpenAI` 客户端调用 LLM；通过注入的配置（API Key、模型名、超时时间）构建纯函数式调用封装，确保 `runEffect` 中的 LLM 副作用依赖官方 SDK。
 
 ## 代码结构规划
 
