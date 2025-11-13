@@ -1,4 +1,6 @@
-import type { AssistantMessage, Signal, SystemMessage, ToolMessage, UserMessage } from "./messages.ts";
+import type { AssistantMessage, SystemMessage, ToolMessage, UserMessage } from "./messages.ts";
+
+export type Signal = UserMessage | ToolMessage | AssistantMessage;
 
 export type AgentState = {
   systemMessage: SystemMessage;

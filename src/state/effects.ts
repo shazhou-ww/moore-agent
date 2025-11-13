@@ -1,0 +1,122 @@
+import type { AgentState } from "../types/state.ts";
+import type { Effect } from "../types/effects.ts";
+import type { AssistantMessage, ToolMessage, UserMessage } from "../types/messages.ts";
+import { makeLLMEffectKey, makeToolEffectKey } from "../utils/id.ts";
+
+/**
+ * 获取 lastSentToLLMAt 之后的所有消息
+ */
+const getMessagesAfterLastSent = (
+  messages: ReadonlyArray<UserMessage | ToolMessage | AssistantMessage>,
+  lastSentToLLMAt: number,
+): ReadonlyArray<UserMessage | ToolMessage | AssistantMessage> => {
+  return messages.filter((msg) => msg.timestamp > lastSentToLLMAt);
+};
+
+/**
+ * 获取最后一条助手消息
+ */
+const getLatestAssistantMessage = (
+  messages: ReadonlyArray<UserMessage | ToolMessage | AssistantMessage>,
+  lastSentToLLMAt: number,
+): AssistantMessage | null => {
+  const afterLastSent = getMessagesAfterLastSent(messages, lastSentToLLMAt);
+  
+  for (let i = afterLastSent.length - 1; i >= 0; i--) {
+    const msg = afterLastSent[i];
+    if (msg && msg.kind === "assistant") {
+      return msg;
+    }
+  }
+  
+  return null;
+};
+
+/**
+ * 检查工具调用是否已被 fulfill
+ */
+const isToolCallFulfilled = (
+  assistantMessage: AssistantMessage,
+  toolMessages: ReadonlyArray<ToolMessage>,
+  toolCallId: string,
+): boolean => {
+  return toolMessages.some(
+    (toolMsg) =>
+      toolMsg.callId === toolCallId && toolMsg.timestamp > assistantMessage.timestamp,
+  );
+};
+
+/**
+ * 获取尚未被 fulfill 的工具调用
+ */
+const getUnfulfilledToolCalls = (
+  assistantMessage: AssistantMessage,
+  messages: ReadonlyArray<UserMessage | ToolMessage | AssistantMessage>,
+): ReadonlyArray<{ id: string; name: string; input: Record<string, unknown> }> => {
+  if (!assistantMessage.toolCalls) {
+    return [];
+  }
+  
+  const toolMessages = messages.filter(
+    (msg): msg is ToolMessage => msg.kind === "tool",
+  );
+  
+  return assistantMessage.toolCalls.filter(
+    (toolCall) => !isToolCallFulfilled(assistantMessage, toolMessages, toolCall.id),
+  );
+};
+
+/**
+ * 根据状态推导需要执行的 effects
+ */
+export const effectsAt = (state: AgentState): Effect[] => {
+  // 1. 先检查待执行的工具调用
+  const latestAssistantMessage = getLatestAssistantMessage(
+    state.messages,
+    state.lastSentToLLMAt,
+  );
+  
+  if (latestAssistantMessage) {
+    const unfulfilledToolCalls = getUnfulfilledToolCalls(
+      latestAssistantMessage,
+      state.messages,
+    );
+    
+    if (unfulfilledToolCalls.length > 0) {
+      // 选择最早的工具调用
+      const firstToolCall = unfulfilledToolCalls[0]!;
+      return [
+        {
+          key: makeToolEffectKey(latestAssistantMessage.id, firstToolCall.id),
+          kind: "call-tool",
+          messageId: latestAssistantMessage.id,
+          call: {
+            id: firstToolCall.id,
+            name: firstToolCall.name,
+            input: firstToolCall.input,
+          },
+        },
+      ];
+    }
+  }
+  
+  // 2. 若无待执行工具调用，再检查待发送给 LLM 的消息
+  const pendingMessages = getMessagesAfterLastSent(state.messages, state.lastSentToLLMAt);
+  
+  if (pendingMessages.length > 0) {
+    // 选择最后一条消息的 id 作为 key
+    const lastMessage = pendingMessages[pendingMessages.length - 1]!;
+    return [
+      {
+        key: makeLLMEffectKey(lastMessage.id),
+        kind: "call-llm",
+        prompt: "", // prompt 将在 runEffect 中构建
+        messageWindow: pendingMessages,
+      },
+    ];
+  }
+  
+  // 3. 若以上两项均不存在，则返回空数组，表示当前 idle
+  return [];
+};
+

@@ -6,11 +6,17 @@
   "dependencies": {
     "@hstore/core": "^0.1.1",
     "@hstore/leveldb-adapter": "^0.1.1",
+    "debug": "^4.4.3",
+    "dotenv": "^17.2.3",
     "moorex": "^0.1.0",
-    "murmurhash": "^2.0.1"
+    "murmurhash": "^2.0.1",
+    "nanoid": "^5.1.6",
+    "neverthrow": "^8.2.0",
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "@types/debug": "^4.1.12",
     "@types/node": "^20.11.30"
   },
   "peerDependencies": {
