@@ -41,7 +41,7 @@ type Signal = UserMessage | ToolMessage | AssistantMessage;
 ```
 
 - 说明：
-  - 所有消息共享 `id`、`content`、`timestamp`；系统消息在代理创建时写入，其余 signal 在 dispatch 前即时生成 UUID。
+  - 所有消息共享 `id`、`content`、`timestamp`；系统消息在代理创建时写入，其余 signal 在 dispatch 前即时生成 ID（使用 `nanoid` 替代 UUID，提升性能与体积）。
   - 助手消息可携带多个工具调用请求；工具消息携带响应的 `callId`，其 `content` 存储 JSON 字符串结果。
 - **AgentState（状态）**
   - 字段：按时间排序的消息列表 `messages`、最后一次向 LLM 发送的时间戳 `lastSentToLLMAt`。
@@ -107,9 +107,70 @@ type Effect =
 ## 依赖使用约定
 
 - **moorex**：参考 npm Readme 使用 `createMoorex(definition)` 构建状态机；`definition` 中包含 `initialState`, `transition(signal)(state)`, `effectsAt(state)` 与 `runEffect(effect)` 等纯函数；`agent.dispatch(signal)` 返回异步 `Promise<void>` 并触发 `agent.on(event)` 订阅的生命周期事件。为保持函数长度不超过 50 行，`transition`、`effectsAt` 分拆至 `src/state/transition.ts`、`src/state/effects.ts`。
-- **@hstore/core**：借助 `await createStore({ schema, adapter, hashFn })` 生成存储实例（`schema` 由 zod 描述 `AgentState` 结构，`hashFn` 推荐 `murmurhash` 实现）；使用 `await store.head()` 或 `await store.get(hash)` 恢复最新快照，`await store.commit(snapshot)` 追加序列化的 `AgentState`；操作流程与 npm Quick Start 一致。
+- **@hstore/core**：借助 `await createStore({ schema, adapter, hashFn })` 生成存储实例（`schema` 由 zod 4 描述 `AgentState` 结构，zod 4 已内置 JSON Schema 支持，可直接使用 `z.schema()` 方法，`hashFn` 推荐 `murmurhash` 实现）；使用 `await store.head()` 或 `await store.get(hash)` 恢复最新快照，`await store.commit(snapshot)` 追加序列化的 `AgentState`；操作流程与 npm Quick Start 一致。
 - **@hstore/leveldb-adapter**：遵循 npm Readme 通过 `await createLevelAdapter({ location, createIfMissing, compression })` 构建 LevelDB 适配器；`location` 由 `src/config/defaults.ts` 提供，可选项透传给 `classic-level`；初始化后注入 `createStore({ adapter })`，并在进程关闭钩子或测试清理阶段调用 `await adapter.close()` / `await adapter.clear()`。
 - **OpenAI 官方 SDK**：在 `src/runtime/llm.ts` 中使用 `openai` 包提供的 `OpenAI` 客户端调用 LLM；通过注入的配置（API Key、模型名、超时时间）构建纯函数式调用封装，确保 `runEffect` 中的 LLM 副作用依赖官方 SDK。
+
+## 推荐的开源 npm 包
+
+### 核心依赖（必需）
+
+- **zod** (`^4.0.0`)：TypeScript 优先的 schema 验证库，用于定义 `AgentState`、消息类型等数据结构，提供运行时类型校验与 TypeScript 类型推断；zod 4 已内置 JSON Schema 支持，无需额外的转换库；已在 `src/types/schema.ts` 中使用，需要添加到 `package.json`。
+
+### 开发工具（推荐）
+
+- **Bun 内置测试**：使用 `bun test` 运行单元测试，无需额外依赖；Bun 内置测试框架，支持快照测试、覆盖率报告等功能。
+- **prettier** (`^3.0.0`)：代码格式化工具，统一代码风格；配置文件 `.prettierrc` 放置于项目根目录。
+- **eslint** (`^8.50.0`) + **@typescript-eslint/parser** + **@typescript-eslint/eslint-plugin**：代码质量检查；TypeScript 专用规则与类型感知 linting。
+- **Bun 运行时**：直接使用 `bun` 命令执行 TypeScript 文件，无需额外的 TypeScript 运行时工具；Bun 已内置 TypeScript 支持。
+
+### 工具库（推荐）
+
+- **nanoid** (`^5.0.0`)：更小更快的 ID 生成器（约 130 字节），比 UUID 更紧凑，适合 URL 安全场景；可替代当前 `src/utils/id.ts` 中的 UUID 实现，提升性能。
+- **debug** (`^4.3.4`)：轻量级调试日志库，通过环境变量控制日志级别（如 `DEBUG=agent:*`），便于开发调试；在 `src/runtime/effects.ts`、`src/agent/index.ts` 中使用。
+- **neverthrow** (`^6.0.0`)：Result 类型错误处理，避免抛出异常，提供 `Ok`/`Err` 模式；适用于工具调用、LLM 调用等可能失败的操作，提升类型安全。
+
+### 配置管理（推荐）
+
+- **dotenv** (`^16.3.0`)：环境变量管理，提供 `.env` 文件加载；用于加载环境变量配置（如 OpenAI API Key、LevelDB 路径等）。
+
+### 推荐安装命令
+
+```bash
+# 核心依赖（必需）
+bun add zod@^4.0.0
+
+# 工具库（推荐）
+bun add nanoid debug neverthrow
+
+# 配置管理（推荐）
+bun add dotenv
+
+# 开发工具（推荐）
+bun add -d prettier eslint @typescript-eslint/parser @typescript-eslint/eslint-plugin
+```
+
+### 使用建议
+
+1. **必需包**：`zod@^4.0.0` 已在代码中使用，必须安装；zod 4 已内置 JSON Schema 支持，可直接使用 `z.schema()` 方法。
+2. **优先推荐**：`nanoid`（ID 生成）、`debug`（日志调试）、`neverthrow`（错误处理）、`dotenv`（配置管理）。
+3. **开发工具**：使用 `prettier` + `eslint` 保证代码质量；使用 Bun 内置测试 `bun test` 运行单元测试。
+4. **运行时**：直接使用 `bun` 命令执行 TypeScript 文件，无需额外的 TypeScript 运行时工具。
+5. **日志**：使用 `debug` 进行开发调试，通过环境变量 `DEBUG=agent:*` 控制日志级别。
+6. **错误处理**：使用 `neverthrow` 的 Result 类型处理工具调用、LLM 调用等可能失败的操作，避免抛出异常。
+7. **类型设计**：优先使用简单的 ADT（代数数据类型），避免过度使用复杂的类型工具。
+8. **序列化**：使用 Node.js 内置的 `JSON.stringify` 和 `JSON.parse` 进行状态序列化/反序列化。
+
+### 包选择标准
+
+1. **简洁性**：优先选择功能单一、API 简单的包，避免过度设计。
+2. **体积大小**：优先选择体积小的包，使用 `bundlephobia` 检查包大小。
+3. **TypeScript 支持**：优先选择原生 TypeScript 支持或提供类型定义的包。
+4. **社区活跃度**：查看 npm 下载量、GitHub stars、最近更新时间、维护状态。
+5. **许可证兼容**：确保包许可证与项目兼容（MIT、Apache-2.0 通常较安全）。
+6. **安全性**：定期使用 `bun audit` 检查安全漏洞，关注包的安全公告。
+7. **可维护性**：选择 API 稳定、文档完善的包，避免频繁变更的包。
+8. **Bun 兼容性**：优先选择与 Bun 兼容良好的包，充分利用 Bun 的内置功能。
 
 ## 代码结构规划
 
@@ -132,9 +193,9 @@ type Effect =
   - `src/agent/index.ts`：导出 `createAgent({ systemPrompt, tools, persistence })`，协调状态机、运行时和持久化；内部以函数式组合保持高可读性。
   - `src/agent/events.ts`：定义事件类型与订阅工具，包装 Moorex `agent.on` 输出，供上层消费。
 - **工具库**
-  - `src/utils/id.ts`：UUID / key 生成器。
+  - `src/utils/id.ts`：ID / key 生成器（使用 `nanoid` 替代 UUID，提升性能与体积）。
   - `src/utils/time.ts`：时间戳辅助函数。
-  - `src/utils/serialize.ts`：集中处理状态序列化/反序列化逻辑。
+  - `src/utils/serialize.ts`：集中处理状态序列化/反序列化逻辑（使用 Node.js 内置的 `JSON.stringify` 和 `JSON.parse`）。
 - **入口与示例**
   - `src/index.ts`：导出公共 API（类型、`createAgent`）。
   - `examples/basic-agent.ts`：演示初始化、dispatch、重启恢复流程。
@@ -143,7 +204,23 @@ type Effect =
 
 ## 下一步任务
 
+### 核心功能开发
+
 - 明确 Agent 框架的初始化协议：系统 prompt、工具列表等均作为创建参数传入，框架本身不预设具体实现。
 - 细化工具调用匹配逻辑：通过 `ToolMessage.callId` 与相应 `AssistantMessage.toolCalls` 的 `id` 对应，确定 fulfill 状态。
 - 接入 HStore：利用现有接口（如 `store.head()`）获取最新快照，确保重启时能够直接复原状态。
 - 通过构建真实场景应用来验证框架行为，后续再考虑专门的单元测试需求。
+
+### 依赖包集成
+
+- **安装必需依赖**：安装 `zod@^4.0.0`（已在代码中使用，需添加到 `package.json`）；zod 4 已内置 JSON Schema 支持，可直接使用。
+- **ID 生成优化**：使用 `nanoid` 替代当前 `src/utils/id.ts` 中的 UUID 实现，提升性能与体积。
+- **错误处理增强**：在 `src/runtime/effects.ts` 中集成 `neverthrow`，使用 Result 类型处理 LLM 调用、工具调用等可能失败的操作。
+- **日志系统**：在开发环境集成 `debug`，通过环境变量 `DEBUG=agent:*` 控制日志级别，用于运行时调试。
+- **配置管理**：使用 `dotenv` 加载环境变量配置（如 OpenAI API Key、LevelDB 路径等）。
+
+### 开发工具配置
+
+- **测试框架**：使用 Bun 内置测试 `bun test`，编写针对 `transition`、`effectsAt`、持久化的单元测试。
+- **代码质量**：配置 Prettier + ESLint，统一代码风格与质量检查。
+- **类型安全**：优先使用简单的 ADT（代数数据类型），避免过度使用复杂的类型工具。
