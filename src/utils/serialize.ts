@@ -1,4 +1,4 @@
-import type { AgentSnapshot } from "../types/state.ts";
+import type { AgentSnapshot } from "../types/schema.ts";
 
 export const serializeSnapshot = (snapshot: AgentSnapshot): string =>
   JSON.stringify(snapshot);

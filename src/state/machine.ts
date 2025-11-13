@@ -1,6 +1,5 @@
 import { createMoorex, type MoorexDefinition } from "moorex";
-import type { AgentState } from "../types/state.ts";
-import type { Signal } from "../types/state.ts";
+import type { AgentState, Signal } from "../types/schema.ts";
 import type { Effect } from "../types/effects.ts";
 import type { AgentDefinitionDeps } from "./definition.ts";
 import { createAgentDefinition } from "./definition.ts";

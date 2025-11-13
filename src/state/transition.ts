@@ -1,6 +1,10 @@
-import type { AgentState } from "../types/state.ts";
-import type { Signal } from "../types/state.ts";
-import type { AssistantMessage, ToolMessage, UserMessage } from "../types/messages.ts";
+import type {
+  AgentState,
+  Signal,
+  AssistantMessage,
+  ToolMessage,
+  UserMessage,
+} from "../types/schema.ts";
 
 /**
  * 将消息插入 messages 并保持按 timestamp 排序

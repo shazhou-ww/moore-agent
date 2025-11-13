@@ -1,7 +1,6 @@
-import type { Signal } from "../types/state.ts";
+import type { Signal, ToolMessage } from "../types/schema.ts";
 import type { CallToolEffect } from "../types/effects.ts";
 import type { EffectInitializer } from "./effects.ts";
-import type { ToolMessage } from "../types/messages.ts";
 import { createId } from "../utils/id.ts";
 import { now } from "../utils/time.ts";
 import debug from "debug";

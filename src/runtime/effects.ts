@@ -1,4 +1,4 @@
-import type { Signal } from "../types/state.ts";
+import type { Signal } from "../types/schema.ts";
 import type { Effect } from "../types/effects.ts";
 import { runLLMEffect, type LLMCallFn } from "./llm.ts";
 import { runToolEffect, type ToolCallFn } from "./tools.ts";

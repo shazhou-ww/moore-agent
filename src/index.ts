@@ -7,13 +7,10 @@ export type {
   AssistantMessage,
   AssistantToolCall,
   Signal,
-} from "./types/messages.ts";
-
-export type {
   AgentState,
   AgentSnapshot,
   MessageWindow,
-} from "./types/state.ts";
+} from "./types/schema.ts";
 
 export type {
   Effect,

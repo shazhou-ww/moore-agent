@@ -1,6 +1,5 @@
 import type { MoorexEvent } from "moorex";
-import type { AgentState } from "../types/state.ts";
-import type { Signal } from "../types/state.ts";
+import type { AgentState, Signal } from "../types/schema.ts";
 import type { Effect } from "../types/effects.ts";
 
 export type AgentEvent = MoorexEvent<AgentState, Signal, Effect>;

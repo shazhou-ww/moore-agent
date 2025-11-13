@@ -1,6 +1,10 @@
-import type { AgentState } from "../types/state.ts";
+import type {
+  AgentState,
+  AssistantMessage,
+  ToolMessage,
+  UserMessage,
+} from "../types/schema.ts";
 import type { Effect } from "../types/effects.ts";
-import type { AssistantMessage, ToolMessage, UserMessage } from "../types/messages.ts";
 import { makeLLMEffectKey, makeToolEffectKey } from "../utils/id.ts";
 
 /**

@@ -17,12 +17,12 @@ export const userMessageSchema = baseMessageSchema.extend({
 export const assistantToolCallSchema = z.object({
   id: z.string(),
   name: z.string(),
-  input: z.record(z.unknown()),
+  input: z.string(),
 });
 
 export const assistantMessageSchema = baseMessageSchema.extend({
   kind: z.literal("assistant"),
-  toolCalls: assistantToolCallSchema.array().optional(),
+  toolCalls: assistantToolCallSchema.array(),
 });
 
 export const toolMessageSchema = baseMessageSchema.extend({
@@ -38,8 +38,25 @@ export const signalSchema = z.union([
 
 export const agentStateSchema = z.object({
   systemMessage: systemMessageSchema,
-  messages: z.array(z.union([userMessageSchema, toolMessageSchema, assistantMessageSchema])),
+  messages: signalSchema.array(),
   lastSentToLLMAt: z.number(),
 });
+
+// 导出所有类型
+export type BaseMessage = z.infer<typeof baseMessageSchema>;
+export type SystemMessage = z.infer<typeof systemMessageSchema>;
+export type UserMessage = z.infer<typeof userMessageSchema>;
+export type AssistantToolCall = z.infer<typeof assistantToolCallSchema>;
+export type AssistantMessage = z.infer<typeof assistantMessageSchema>;
+export type ToolMessage = z.infer<typeof toolMessageSchema>;
+export type Signal = z.infer<typeof signalSchema>;
+export type AgentState = z.infer<typeof agentStateSchema>;
+
+// 导出辅助类型
+export type MessageWindow = ReadonlyArray<Signal>;
+export type AgentSnapshot = {
+  state: AgentState;
+  updatedAt: number;
+};
 
 

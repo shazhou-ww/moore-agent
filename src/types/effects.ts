@@ -1,4 +1,4 @@
-import type { MessageWindow } from "./state.ts";
+import type { MessageWindow } from "./schema.ts";
 
 export type CallLLMEffect = {
   key: `llm-${string}`;

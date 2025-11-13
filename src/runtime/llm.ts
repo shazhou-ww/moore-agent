@@ -1,7 +1,6 @@
-import type { Signal } from "../types/state.ts";
+import type { Signal, AssistantMessage, AssistantToolCall } from "../types/schema.ts";
 import type { CallLLMEffect } from "../types/effects.ts";
 import type { EffectInitializer } from "./effects.ts";
-import type { AssistantMessage, AssistantToolCall } from "../types/messages.ts";
 import { createId } from "../utils/id.ts";
 import { now } from "../utils/time.ts";
 import debug from "debug";

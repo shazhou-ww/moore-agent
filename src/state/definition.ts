@@ -1,7 +1,5 @@
-import type { AgentState } from "../types/state.ts";
-import type { Signal } from "../types/state.ts";
+import type { AgentState, Signal, SystemMessage } from "../types/schema.ts";
 import type { Effect } from "../types/effects.ts";
-import type { SystemMessage } from "../types/messages.ts";
 import { transition } from "./transition.ts";
 import { effectsAt } from "./effects.ts";
 import { now, before } from "../utils/time.ts";
