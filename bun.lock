@@ -5,8 +5,8 @@
     "": {
       "name": "moore-agent",
       "dependencies": {
-        "@hstore/core": "^0.1.1",
-        "@hstore/leveldb-adapter": "^0.1.1",
+        "@hstore/core": "^0.1.2",
+        "@hstore/leveldb-adapter": "^0.1.2",
         "debug": "^4.4.3",
         "dotenv": "^17.2.3",
         "moorex": "^0.1.0",
@@ -26,9 +26,9 @@
     },
   },
   "packages": {
-    "@hstore/core": ["@hstore/core@0.1.1", "", { "dependencies": { "zod": "^3.23.8" } }, "sha512-O4isCRLT0DeEVinj/REMhSi2ILrxAgPvIszLklJeQE9ZZQ37hI6cok0eWonLbLGSSAaDXxXV0AYI3M+rO4hnlA=="],
+    "@hstore/core": ["@hstore/core@0.1.2", "", { "dependencies": { "zod": "^3.23.8" } }, "sha512-R4cr5qQpWup0T/Y3+eBq4js1uQE0xaAu9PAljlnNBxxaEN1mivqI978y9DEkiNUUbHka+6kZO8yzEzwq45UDsQ=="],
 
-    "@hstore/leveldb-adapter": ["@hstore/leveldb-adapter@0.1.1", "", { "dependencies": { "@hstore/core": "0.1.1", "classic-level": "^3.0.0" } }, "sha512-Dean6IdXemqjEtHai4Y4gLWu+luivNUCTuEAk0qmueyZAleM2cyNkILdwoiZh+bFU0iCo8m8xf/fzVgSek/1uQ=="],
+    "@hstore/leveldb-adapter": ["@hstore/leveldb-adapter@0.1.2", "", { "dependencies": { "@hstore/core": "^0.1.2", "classic-level": "^3.0.0" } }, "sha512-12Eeib98ll9WuxgL+AEzQEVqIfnNDJQob3xEvnsiRA2rgmzxbxWBbrhcGGzUt3g4HePIgMLQ8PAPewJeIYBi3w=="],
 
     "@rollup/rollup-linux-x64-gnu": ["@rollup/rollup-linux-x64-gnu@4.53.2", "", { "os": "linux", "cpu": "x64" }, "sha512-yo8d6tdfdeBArzC7T/PnHd7OypfI9cbuZzPnzLJIyKYFhAQ8SvlkKtKBMbXDxe1h03Rcr7u++nFS7tqXz87Gtw=="],
 

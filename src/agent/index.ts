@@ -1,11 +1,10 @@
-import type { AgentState, UserMessage } from "../types/schema.ts";
-import { createAgentMachine, type AgentMachineDeps } from "../state/machine.ts";
+import type { AgentState, Signal, UserMessage } from "../types/schema.ts";
+import { createMoorex } from "moorex";
 import {
   createLevelAdapter,
-  type LevelAdapter,
   type LevelAdapterOptions,
 } from "@hstore/leveldb-adapter";
-import { createStore, type HStore, type Hash, type JsonValue } from "@hstore/core";
+import { createStore, freezeJson, type Hash, type FrozenJson } from "@hstore/core";
 import {
   DEFAULT_LEVELDB_LOCATION,
   DEFAULT_CREATE_IF_MISSING,
@@ -13,23 +12,24 @@ import {
 } from "../config/defaults.ts";
 import { agentStateSchema } from "../types/schema.ts";
 import { createHash } from "crypto";
-import { createEventHandlers, type AgentEventHandlers, type AgentEvent } from "./events.ts";
+import type { AgentEvent } from "./events.ts";
 import { createId } from "../utils/id.ts";
-import { now } from "../utils/time.ts";
+import { before, now } from "../utils/time.ts";
 import debug from "debug";
-import type { LLMCallFn } from "../runtime/llm.ts";
+import type { Effect, LLMCallFn, ToolCallFn } from "../types/effects.ts";
+import { transition } from "./transition.ts";
+import { effectsAt } from "./effects.ts";
+import { createRunEffect } from "./runEffect.ts";
 
 const log = debug("agent");
 
 export type AgentDeps = {
   systemPrompt: string;
   callLLM: LLMCallFn;
-  callTool: (name: string, input: Record<string, unknown>) => Promise<string>;
+  callTool: ToolCallFn;
   persistence?: {
     adapter?: Partial<LevelAdapterOptions>;
   };
-  createdAt?: number;
-  eventHandlers?: AgentEventHandlers;
 };
 
 export type Agent = {
@@ -68,38 +68,41 @@ export const createAgent = async (deps: AgentDeps): Promise<Agent> => {
   });
   
   // 尝试加载最新状态
-  let initialState: AgentState | undefined = undefined;
-  const head = await store.head();
-  if (head && head.value) {
-    log("Loaded latest state from persistence");
-    initialState = head.value as unknown as AgentState;
-    deps.createdAt = (head.value as unknown as AgentState).systemMessage.timestamp;
+  const loadInitialState = async () => {
+    const head = await store.head();
+    return head?.value ?? freezeJson({
+      systemMessage: {
+        id: createId(),
+        kind: "system",
+        content: deps.systemPrompt,
+        timestamp: now(),
+      },
+      messages: [],
+      lastSentToLLMAt: before(now(), 1),
+    } as AgentState);
   }
-  
-  // 创建状态机
-  const machineDeps: AgentMachineDeps = {
-    systemPrompt: deps.systemPrompt,
+  const initialState: FrozenJson<AgentState> = await loadInitialState();
+
+  // 创建 runEffect 函数
+  const runEffect = createRunEffect({
     callLLM: deps.callLLM,
     callTool: deps.callTool,
-    createdAt: deps.createdAt,
+  });
+
+  const machine = createMoorex<FrozenJson<AgentState>, Signal, Effect>({
     initialState,
-  };
-  
-  const machine = createAgentMachine(machineDeps);
-  
-  // 设置事件处理器
-  if (deps.eventHandlers) {
-    const handler = createEventHandlers(deps.eventHandlers);
-    machine.on(handler);
-  }
+    transition,
+    effectsAt,
+    runEffect,
+  });
   
   // 设置持久化事件处理器（只保存最后的状态）
   let lastState: AgentState | null = null;
   machine.on((event) => {
     if (event.type === "state-updated") {
-      lastState = event.state;
+      lastState = event.state as unknown as AgentState;
       // 异步保存，不阻塞事件处理
-      store.commit(event.state).catch((error) => {
+      store.commit(event.state as any).catch((error) => {
         log("Error saving state:", error);
       });
     }
@@ -119,10 +122,10 @@ export const createAgent = async (deps: AgentDeps): Promise<Agent> => {
       machine.dispatch(userMessage);
     },
     getState: () => {
-      return machine.getState();
+      return machine.getState() as unknown as AgentState;
     },
     on: (handler: (event: AgentEvent) => void) => {
-      return machine.on(handler);
+      return machine.on(handler as any);
     },
     close: async () => {
       log("Closing agent");

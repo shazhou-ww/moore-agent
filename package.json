@@ -4,8 +4,8 @@
   "type": "module",
   "private": true,
   "dependencies": {
-    "@hstore/core": "^0.1.1",
-    "@hstore/leveldb-adapter": "^0.1.1",
+    "@hstore/core": "^0.1.2",
+    "@hstore/leveldb-adapter": "^0.1.2",
     "debug": "^4.4.3",
     "dotenv": "^17.2.3",
     "moorex": "^0.1.0",

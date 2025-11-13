@@ -1,3 +1,4 @@
+import type { FrozenJson } from "@hstore/core";
 import type {
   AgentState,
   AssistantMessage,
@@ -56,11 +57,7 @@ const isToolCallFulfilled = (
 const getUnfulfilledToolCalls = (
   assistantMessage: AssistantMessage,
   messages: ReadonlyArray<UserMessage | ToolMessage | AssistantMessage>,
-): ReadonlyArray<{ id: string; name: string; input: Record<string, unknown> }> => {
-  if (!assistantMessage.toolCalls) {
-    return [];
-  }
-  
+): ReadonlyArray<{ id: string; name: string; input: string }> => {
   const toolMessages = messages.filter(
     (msg): msg is ToolMessage => msg.kind === "tool",
   );
@@ -73,17 +70,17 @@ const getUnfulfilledToolCalls = (
 /**
  * 根据状态推导需要执行的 effects
  */
-export const effectsAt = (state: AgentState): Effect[] => {
+export const effectsAt = (state: FrozenJson<AgentState>): Effect[] => {
   // 1. 先检查待执行的工具调用
   const latestAssistantMessage = getLatestAssistantMessage(
-    state.messages,
+    state.messages as ReadonlyArray<UserMessage | ToolMessage | AssistantMessage>,
     state.lastSentToLLMAt,
   );
   
   if (latestAssistantMessage) {
     const unfulfilledToolCalls = getUnfulfilledToolCalls(
       latestAssistantMessage,
-      state.messages,
+      state.messages as ReadonlyArray<UserMessage | ToolMessage | AssistantMessage>,
     );
     
     if (unfulfilledToolCalls.length > 0) {
@@ -105,7 +102,10 @@ export const effectsAt = (state: AgentState): Effect[] => {
   }
   
   // 2. 若无待执行工具调用，再检查待发送给 LLM 的消息
-  const pendingMessages = getMessagesAfterLastSent(state.messages, state.lastSentToLLMAt);
+  const pendingMessages = getMessagesAfterLastSent(
+    state.messages as ReadonlyArray<UserMessage | ToolMessage | AssistantMessage>,
+    state.lastSentToLLMAt,
+  );
   
   if (pendingMessages.length > 0) {
     // 选择最后一条消息的 id 作为 key

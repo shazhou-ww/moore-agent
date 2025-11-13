@@ -1,9 +1,9 @@
+import type { FrozenJson } from "@hstore/core";
 import type {
   AgentState,
   Signal,
   AssistantMessage,
   ToolMessage,
-  UserMessage,
 } from "../types/schema.ts";
 
 /**
@@ -13,7 +13,7 @@ const insertMessage = (
   messages: ReadonlyArray<Signal>,
   newMessage: Signal,
 ): ReadonlyArray<Signal> => {
-  const result: Signal[] = [...messages];
+  const result = [...messages];
   let insertIndex = result.length;
   
   for (let i = 0; i < result.length; i++) {
@@ -46,11 +46,7 @@ const isToolCallFulfilled = (
 const getUnfulfilledToolCalls = (
   assistantMessage: AssistantMessage,
   toolMessages: ReadonlyArray<ToolMessage>,
-): ReadonlyArray<{ id: string; name: string; input: Record<string, unknown> }> => {
-  if (!assistantMessage.toolCalls) {
-    return [];
-  }
-  
+): ReadonlyArray<{ id: string; name: string; input: string }> => {
   return assistantMessage.toolCalls.filter(
     (toolCall) => !isToolCallFulfilled(assistantMessage, toolMessages, toolCall.id),
   );
@@ -70,7 +66,7 @@ const isValidTimestamp = (
  * 状态转换函数
  * 将信号应用到状态，返回新状态
  */
-export const transition = (signal: Signal) => (state: AgentState): AgentState => {
+export const transition = (signal: Signal) => (state: FrozenJson<AgentState>): FrozenJson<AgentState> => {
   // 验证 timestamp
   if (!isValidTimestamp(signal.timestamp, state.lastSentToLLMAt)) {
     throw new Error(
@@ -79,12 +75,12 @@ export const transition = (signal: Signal) => (state: AgentState): AgentState =>
   }
   
   // 插入消息并保持排序
-  const newMessages = insertMessage(state.messages, signal);
+  const newMessages = insertMessage(state.messages as ReadonlyArray<Signal>, signal);
   
   // 返回新状态
   return {
     ...state,
     messages: newMessages,
-  };
+  } as FrozenJson<AgentState>;
 };
 
