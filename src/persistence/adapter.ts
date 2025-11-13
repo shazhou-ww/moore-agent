@@ -48,21 +48,3 @@ export const closeAdapter = async (): Promise<void> => {
   }
 };
 
-/**
- * 清理适配器（测试用）
- */
-export const clearAdapter = async (): Promise<void> => {
-  if (adapterInstance) {
-    log("Clearing adapter");
-    await adapterInstance.clear();
-    adapterInstance = null;
-  }
-};
-
-/**
- * 获取当前适配器实例（如果已创建）
- */
-export const getAdapter = (): LevelAdapter | null => {
-  return adapterInstance;
-};
-

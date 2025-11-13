@@ -1,24 +1,21 @@
-import type { Moorex } from "moorex";
 import type { AgentState } from "../types/state.ts";
-import type { Signal } from "../types/state.ts";
-import type { Effect } from "../types/effects.ts";
+import type { UserMessage } from "../types/messages.ts";
 import { createAgentMachine, type AgentMachineDeps } from "../state/machine.ts";
 import { createAdapter, closeAdapter, type AdapterOptions } from "../persistence/adapter.ts";
 import { createStateStore, loadLatestState } from "../persistence/store.ts";
 import { PersistenceQueue } from "../persistence/queue.ts";
-import { createEventHandlers, type AgentEventHandlers } from "./events.ts";
+import { createEventHandlers, type AgentEventHandlers, type AgentEvent } from "./events.ts";
+import { createId } from "../utils/id.ts";
 import { now } from "../utils/time.ts";
 import debug from "debug";
+import type { LLMCallFn } from "../runtime/llm.ts";
 
 const log = debug("agent");
-
-import type { LLMCallFn, LLMResponse } from "../runtime/llm.ts";
 
 export type AgentDeps = {
   systemPrompt: string;
   callLLM: LLMCallFn;
   callTool: (name: string, input: Record<string, unknown>) => Promise<string>;
-  tools?: Record<string, (input: Record<string, unknown>) => Promise<string>>;
   persistence?: {
     adapter?: AdapterOptions;
     enabled?: boolean;
@@ -28,9 +25,9 @@ export type AgentDeps = {
 };
 
 export type Agent = {
-  dispatch(signal: Signal): void;
+  sendMessage(content: string): void;
   getState(): AgentState;
-  on(handler: (event: any) => void): () => void;
+  on(handler: (event: AgentEvent) => void): () => void;
   close(): Promise<void>;
 };
 
@@ -87,14 +84,22 @@ export const createAgent = async (deps: AgentDeps): Promise<Agent> => {
   }
   
   return {
-    dispatch: (signal: Signal) => {
-      log("Dispatching signal:", signal.kind);
-      machine.dispatch(signal);
+    sendMessage: (content: string) => {
+      log("Sending user message:", content);
+      
+      const userMessage: UserMessage = {
+        id: createId(),
+        kind: "user",
+        content,
+        timestamp: now(),
+      };
+      
+      machine.dispatch(userMessage);
     },
     getState: () => {
       return machine.getState();
     },
-    on: (handler: (event: any) => void) => {
+    on: (handler: (event: AgentEvent) => void) => {
       return machine.on(handler);
     },
     close: async () => {

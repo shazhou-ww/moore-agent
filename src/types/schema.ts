@@ -42,10 +42,4 @@ export const agentStateSchema = z.object({
   lastSentToLLMAt: z.number(),
 });
 
-export const agentSnapshotSchema = z.object({
-  state: agentStateSchema,
-  updatedAt: z.number(),
-});
-
-export type AgentStateInput = z.input<typeof agentStateSchema>;
 

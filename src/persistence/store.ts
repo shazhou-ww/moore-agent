@@ -57,25 +57,6 @@ export const loadLatestState = async (
 };
 
 /**
- * 根据 hash 加载状态
- */
-export const loadStateByHash = async (
-  store: HStore<AgentState>,
-  hash: Hash,
-): Promise<AgentState | null> => {
-  log("Loading state by hash:", hash);
-  
-  const version = await store.get(hash);
-  
-  if (!version) {
-    log("No state found for hash:", hash);
-    return null;
-  }
-  
-  return version.value;
-};
-
-/**
  * 追加状态
  */
 export const appendState = async (

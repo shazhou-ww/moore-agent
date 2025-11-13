@@ -1,6 +1,4 @@
-import { createAgent, type UserMessage } from "../src/index.ts";
-import { createId } from "../src/utils/id.ts";
-import { now } from "../src/utils/time.ts";
+import { createAgent } from "../src/index.ts";
 import debug from "debug";
 
 const log = debug("examples:basic-agent");
@@ -83,15 +81,8 @@ const main = async () => {
   log("Agent created, current state:", agent.getState());
   
   // 发送用户消息
-  const userMessage: UserMessage = {
-    id: createId(),
-    kind: "user",
-    content: "Hello, how are you?",
-    timestamp: now(),
-  };
-  
-  log("Dispatching user message");
-  agent.dispatch(userMessage);
+  log("Sending user message");
+  agent.sendMessage("Hello, how are you?");
   
   // 等待一段时间让效果完成
   await new Promise((resolve) => setTimeout(resolve, 1000));
