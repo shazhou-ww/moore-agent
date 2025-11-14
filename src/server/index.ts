@@ -96,6 +96,7 @@ export const startServer = async (port: number = 3000) => {
 
   // GET /api/receive (SSE)
   app.get("/api/receive", async (req: Request, res: Response) => {
+    log("SSE connection requested");
     const currentAgent = await initializeAgent();
     const state = currentAgent.getState();
 
@@ -106,12 +107,25 @@ export const startServer = async (port: number = 3000) => {
     res.setHeader("X-Accel-Buffering", "no"); // 禁用 nginx 缓冲
 
     // 发送初始 state-updated 事件
-    const initialEvent = {
-      type: "state-updated",
-      state,
-      effectCount: 0,
-    };
-    res.write(`data: ${JSON.stringify(initialEvent)}\n\n`);
+    try {
+      const initialEvent = {
+        type: "state-updated",
+        state,
+        effectCount: 0,
+      };
+      const eventData = `data: ${JSON.stringify(initialEvent)}\n\n`;
+      log("Sending initial state-updated event");
+      log("State keys:", Object.keys(state));
+      res.write(eventData);
+      // 确保数据被立即发送（Express 会自动处理，但我们可以显式调用）
+      if (typeof (res as any).flush === "function") {
+        (res as any).flush();
+      }
+    } catch (error) {
+      log("Error sending initial state:", error);
+      res.status(500).end();
+      return;
+    }
 
     // 订阅后续事件
     const unsubscribe = currentAgent.on((event) => {

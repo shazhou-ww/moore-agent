@@ -10,9 +10,9 @@ import type {
  * 将消息插入 messages 并保持按 timestamp 排序
  */
 const insertMessage = (
-  messages: ReadonlyArray<Signal> | Signal[],
+  messages: FrozenJson<Signal[]>,
   newMessage: Signal,
-): Signal[] => {
+): FrozenJson<Signal[]> => {
   const result = [...messages];
   let insertIndex = result.length;
   
@@ -80,10 +80,17 @@ export const transition = <T extends AgentState | FrozenJson<AgentState>>(
   // 插入消息并保持排序
   const newMessages = insertMessage(state.messages, signal);
   
+  // 如果是 assistant message，更新 lastSentToLLMAt 为 assistant message 的 timestamp
+  // 这表示我们已经将消息发送给 LLM 并收到了响应
+  const newLastSentToLLMAt = signal.kind === "assistant" 
+    ? signal.timestamp 
+    : state.lastSentToLLMAt;
+  
   // 返回新状态
   return {
     ...state,
     messages: newMessages,
+    lastSentToLLMAt: newLastSentToLLMAt,
   } as T;
 };
 
