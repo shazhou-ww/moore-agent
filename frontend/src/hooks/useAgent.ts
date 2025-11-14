@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import type { AgentState, AgentEvent } from "../types.ts";
+import type { AgentState, AgentEvent, UserMessage } from "../types.ts";
 import type { FrozenJson } from "@hstore/core";
 import { transition as baseTransition } from "@/agent/transition.ts";
 
@@ -7,26 +7,34 @@ type UseAgentReturn = {
   state: FrozenJson<AgentState> | null;
   isLoading: boolean;
   sendMessage: (message: string) => Promise<void>;
-  pendingMessages: string[];
+  pendingMessages: ReadonlyArray<UserMessage>;
 };
 
 export const useAgent = (): UseAgentReturn => {
   const [state, setState] = useState<FrozenJson<AgentState> | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [pendingMessages, setPendingMessages] = useState<string[]>([]);
+  const [pendingMessages, setPendingMessages] = useState<UserMessage[]>([]);
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
+  const isConnectingRef = useRef<boolean>(false);
 
   const connectSSE = useCallback(() => {
+    // 防止重复连接
+    if (isConnectingRef.current || eventSourceRef.current?.readyState === EventSource.OPEN) {
+      return;
+    }
+
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
     }
 
+    isConnectingRef.current = true;
     const eventSource = new EventSource("/api/receive");
     eventSourceRef.current = eventSource;
 
     eventSource.onopen = () => {
       console.log("SSE connection opened");
+      isConnectingRef.current = false;
     };
 
     eventSource.onmessage = (event) => {
@@ -56,9 +64,11 @@ export const useAgent = (): UseAgentReturn => {
             }
           });
 
-          // 如果收到 assistant 消息，移除对应的 pending message
-          if (agentEvent.signal.kind === "assistant") {
-            setPendingMessages((prev) => prev.slice(1));
+          // 如果收到 user message 的 signal，说明该消息已被确认，从 pendingMessages 中移除
+          if (agentEvent.signal.kind === "user") {
+            setPendingMessages((prev) =>
+              prev.filter((msg) => msg.id !== agentEvent.signal.id)
+            );
           }
         }
       } catch (error) {
@@ -68,6 +78,7 @@ export const useAgent = (): UseAgentReturn => {
 
     eventSource.onerror = (error) => {
       console.error("SSE error:", error);
+      isConnectingRef.current = false;
       eventSource.close();
 
       // 尝试重连
@@ -93,9 +104,17 @@ export const useAgent = (): UseAgentReturn => {
     };
   }, [connectSSE]);
 
-  const sendMessage = useCallback(async (message: string) => {
+  const sendMessage = useCallback(async (content: string) => {
+    // 生成 UUID 和 timestamp
+    const userMessage: UserMessage = {
+      id: crypto.randomUUID(),
+      kind: "user",
+      content,
+      timestamp: Date.now(),
+    };
+
     // 添加到 pending messages
-    setPendingMessages((prev) => [...prev, message]);
+    setPendingMessages((prev) => [...prev, userMessage]);
 
     try {
       const response = await fetch("/api/send", {
@@ -103,16 +122,26 @@ export const useAgent = (): UseAgentReturn => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({ userMessage }),
       });
 
       if (!response.ok) {
-        throw new Error("Failed to send message");
+        if (response.status === 409) {
+          console.error("Message ID conflict");
+        } else {
+          console.error("Failed to send message");
+        }
+        // 从 pending messages 中移除
+        setPendingMessages((prev) =>
+          prev.filter((msg) => msg.id !== userMessage.id)
+        );
       }
     } catch (error) {
       console.error("Error sending message:", error);
       // 从 pending messages 中移除
-      setPendingMessages((prev) => prev.slice(0, -1));
+      setPendingMessages((prev) =>
+        prev.filter((msg) => msg.id !== userMessage.id)
+      );
     }
   }, []);
 

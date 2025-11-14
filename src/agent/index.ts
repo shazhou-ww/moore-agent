@@ -33,7 +33,7 @@ export type AgentDeps = {
 };
 
 export type Agent = {
-  sendMessage(content: string): void;
+  sendMessage(userMessage: UserMessage): void;
   getState(): AgentState;
   on(handler: (event: AgentEvent) => void): () => void;
   close(): Promise<void>;
@@ -109,16 +109,8 @@ export const createAgent = async (deps: AgentDeps): Promise<Agent> => {
   });
   
   return {
-    sendMessage: (content: string) => {
-      log("Sending user message:", content);
-      
-      const userMessage: UserMessage = {
-        id: createId(),
-        kind: "user",
-        content,
-        timestamp: now(),
-      };
-      
+    sendMessage: (userMessage: UserMessage) => {
+      log("Sending user message:", userMessage.id, userMessage.content);
       machine.dispatch(userMessage);
     },
     getState: () => {

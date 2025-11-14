@@ -14,20 +14,24 @@ import SendIcon from "@mui/icons-material/Send";
 import PersonIcon from "@mui/icons-material/Person";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
 import BuildIcon from "@mui/icons-material/Build";
-import type { AgentState } from "../types.ts";
+import type { AgentState, UserMessage } from "../types.ts";
 import type { FrozenJson } from "@hstore/core";
-import { useAgent } from "../hooks/useAgent.ts";
 
 type ChatInterfaceProps = {
   state: FrozenJson<AgentState>;
+  pendingMessages: ReadonlyArray<UserMessage>;
+  sendMessage: (message: string) => Promise<void>;
 };
 
-export const ChatInterface = ({ state: initialState }: ChatInterfaceProps) => {
-  const { sendMessage, pendingMessages, state } = useAgent();
+export const ChatInterface = ({
+  state,
+  pendingMessages,
+  sendMessage,
+}: ChatInterfaceProps) => {
   const [input, setInput] = useState("");
   
-  // 使用最新的 state，如果还没有则使用初始状态
-  const currentState = state || initialState;
+  // 使用传入的 state
+  const currentState = state;
 
   const handleSend = async () => {
     if (!input.trim()) return;
@@ -43,15 +47,19 @@ export const ChatInterface = ({ state: initialState }: ChatInterfaceProps) => {
     }
   };
 
+  // 合并消息，去重：如果 state.messages 中已有某条消息，就不显示 pendingMessages 中的
+  const confirmedMessageIds = new Set(currentState.messages.map((msg) => msg.id));
+  const unconfirmedMessages = pendingMessages.filter(
+    (msg) => !confirmedMessageIds.has(msg.id)
+  );
+
   const allMessages = [
     ...currentState.messages,
-    ...pendingMessages.map((content, index) => ({
-      id: `pending-${index}`,
-      kind: "user" as const,
-      content,
-      timestamp: Date.now() + index,
-    })),
+    ...unconfirmedMessages,
   ].sort((a, b) => a.timestamp - b.timestamp);
+
+  // 创建未确认消息的 ID 集合，用于样式判断
+  const unconfirmedMessageIds = new Set(unconfirmedMessages.map((msg) => msg.id));
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -149,6 +157,14 @@ export const ChatInterface = ({ state: initialState }: ChatInterfaceProps) => {
                       message.kind === "user"
                         ? "primary.contrastText"
                         : "text.primary",
+                    // 未确认消息的特殊样式：降低透明度，添加虚线边框
+                    opacity: unconfirmedMessageIds.has(message.id) ? 0.6 : 1,
+                    border: unconfirmedMessageIds.has(message.id)
+                      ? "1px dashed"
+                      : "none",
+                    borderColor: unconfirmedMessageIds.has(message.id)
+                      ? "primary.main"
+                      : "transparent",
                   }}
                 >
                   <Typography variant="body1" sx={{ whiteSpace: "pre-wrap" }}>

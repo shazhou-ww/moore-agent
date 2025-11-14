@@ -3,7 +3,7 @@ import { useAgent } from "./hooks/useAgent.ts";
 import { ChatInterface } from "./components/ChatInterface.tsx";
 
 const App = () => {
-  const { state, isLoading } = useAgent();
+  const { state, isLoading, sendMessage, pendingMessages } = useAgent();
 
   if (isLoading || !state) {
     return (
@@ -27,7 +27,11 @@ const App = () => {
 
   return (
     <Container maxWidth="md" sx={{ height: "100vh", py: 2 }}>
-      <ChatInterface state={state} />
+      <ChatInterface
+        state={state}
+        sendMessage={sendMessage}
+        pendingMessages={pendingMessages}
+      />
     </Container>
   );
 };

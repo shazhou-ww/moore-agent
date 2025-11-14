@@ -56,14 +56,36 @@ export const startServer = async (port: number = 3000) => {
   // POST /api/send
   app.post("/api/send", async (req: Request, res: Response) => {
     try {
-      const { message } = req.body;
+      const { userMessage } = req.body;
 
-      if (!message || typeof message !== "string") {
-        return res.status(400).json({ error: "Message is required" });
+      if (!userMessage || typeof userMessage !== "object") {
+        return res.status(400).json({ error: "UserMessage is required" });
+      }
+
+      // 验证 userMessage 结构
+      if (
+        !userMessage.id ||
+        typeof userMessage.id !== "string" ||
+        !userMessage.content ||
+        typeof userMessage.content !== "string" ||
+        !userMessage.timestamp ||
+        typeof userMessage.timestamp !== "number" ||
+        userMessage.kind !== "user"
+      ) {
+        return res.status(400).json({ error: "Invalid UserMessage format" });
       }
 
       const currentAgent = await initializeAgent();
-      currentAgent.sendMessage(message);
+      
+      // 检查 ID 冲突
+      const state = currentAgent.getState();
+      const hasConflict = state.messages.some((msg) => msg.id === userMessage.id);
+      
+      if (hasConflict) {
+        return res.status(409).json({ error: "Message ID conflict" });
+      }
+
+      currentAgent.sendMessage(userMessage);
 
       return res.json({ success: true });
     } catch (error) {
