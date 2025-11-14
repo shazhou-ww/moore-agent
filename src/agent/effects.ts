@@ -84,7 +84,20 @@ export const effectsAt = (state: FrozenJson<AgentState>): Effect[] => {
     // 如果有待发送的消息，需要包含它们
     // 同时需要提示 LLM 基于之前的内容继续补全
     const existingContent = Array.from(state.partialMessage.chunks).join("");
-    const continuationPrompt = `Continue from: "${existingContent}"`;
+    const continuationPrompt = `
+      You are a model that is resuming a previously interrupted generation.
+
+      Below is the content you have already generated (partial output):
+
+      === BEGIN PARTIAL OUTPUT ===
+      ${existingContent}
+      === END PARTIAL OUTPUT ===
+
+      Continue generating the text from after the END PARTIAL OUTPUT.
+      Do not repeat any sentences from the partial output.
+      Do not rewrite or modify the existing content.
+      Do not explain anything. Just continue the text directly.
+    `;
     
     return [
       {
@@ -139,7 +152,7 @@ export const effectsAt = (state: FrozenJson<AgentState>): Effect[] => {
       {
         key: makeLLMEffectKey(newMessageId),
         kind: "call-llm",
-        prompt: "", // prompt 将在 runEffect 中构建
+        prompt: state.systemMessage.content, // 使用 systemMessage 作为 prompt
         messageWindow: pendingMessages as MessageWindow,
       },
     ];

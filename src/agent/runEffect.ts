@@ -21,23 +21,6 @@ import debug from "debug";
 const log = debug("agent:runEffect");
 
 /**
- * 构建 prompt
- */
-const buildPrompt = (
-  messageWindow: ReadonlyArray<UserMessage | ToolMessage | AssistantMessage>,
-): string => {
-  return messageWindow
-    .map((msg) => {
-      if (msg.kind === "user" || msg.kind === "tool" || msg.kind === "assistant") {
-        return `${msg.kind}: ${msg.content}`;
-      }
-      return "";
-    })
-    .filter((line) => line.length > 0)
-    .join("\n");
-};
-
-/**
  * 转换工具调用为 AssistantToolCall 格式
  */
 const convertToolCalls = (
@@ -60,7 +43,7 @@ type RunEffectDeps = {
 };
 
 // Chunk 合并配置
-const CHUNK_QUEUE_SIZE_THRESHOLD = 1000; // 当 queue 中的 chunk 内容超过这个长度时触发 signal
+const CHUNK_QUEUE_SIZE_THRESHOLD = 100; // 当 queue 中的 chunk 内容超过这个长度时触发 signal
 
 /**
  * 创建 LLM effect 的初始器
@@ -79,7 +62,7 @@ const createLLMEffectInitializer = (
       }
 
       try {
-        const prompt = effect.prompt || buildPrompt(effect.messageWindow);
+        const prompt = effect.prompt || "";
         log("Calling LLM with prompt:", prompt);
 
         let chunkQueue: string[] = [];

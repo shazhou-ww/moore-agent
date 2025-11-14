@@ -121,10 +121,39 @@ class FileLogger {
 const fileLogger = new FileLogger();
 
 /**
+ * 去除 ANSI 颜色代码
+ */
+const stripAnsiCodes = (text: string): string => {
+  // ANSI 转义序列的正则表达式
+  // 匹配 \x1b[ 或 \u001b[ 开头的转义序列
+  // 格式：ESC[数字;数字...m
+  return text
+    .replace(/\u001b\[[0-9;]*m/g, "") // \u001b[ 格式
+    .replace(/\x1b\[[0-9;]*m/g, "");  // \x1b[ 格式
+};
+
+/**
  * 拦截 debug 包的输出，同时写入文件和控制台
  */
 export const setupFileLogging = async (): Promise<void> => {
   await fileLogger.initialize();
+
+  // 启用所有相关的 debug 命名空间（如果未设置 DEBUG 环境变量）
+  if (!process.env.DEBUG) {
+    process.env.DEBUG = "server*,agent*";
+  } else {
+    // 如果已设置，确保包含 server 和 agent 命名空间
+    const existingDebug = process.env.DEBUG;
+    if (!existingDebug.includes("server") && !existingDebug.includes("*")) {
+      process.env.DEBUG = `${existingDebug},server*,agent*`;
+    }
+  }
+
+  // 确保 debug 包使用新的环境变量设置
+  // debug.enable() 会重新读取环境变量
+  if (typeof debug.enable === "function") {
+    debug.enable(process.env.DEBUG);
+  }
 
   // 保存原始的 debug.log 函数
   const originalLog = debug.log;
@@ -142,25 +171,33 @@ export const setupFileLogging = async (): Promise<void> => {
     if (args.length > 0) {
       const firstArg = String(args[0]);
       // debug 包的格式通常是 "namespace message" 或只有 "message"
-      const parts = firstArg.split(" ");
-      if (parts.length > 1 && parts[0]!.includes(":")) {
-        // 有命名空间
-        namespace = parts[0]!;
-        message = parts.slice(1).join(" ");
-        // 添加剩余的参数
-        if (args.length > 1) {
-          message += " " + args.slice(1).map(String).join(" ");
-        }
-      } else {
-        // 没有命名空间，所有参数都是消息
-        message = args.map((arg) => {
+      // 命名空间格式通常是 "namespace:" 或 "namespace message"
+      const colonIndex = firstArg.indexOf(":");
+      if (colonIndex > 0) {
+        // 有命名空间（格式：namespace: message）
+        namespace = firstArg.substring(0, colonIndex);
+        const remaining = firstArg.substring(colonIndex + 1).trim();
+        // 组合所有参数
+        const allArgs = [remaining, ...args.slice(1)];
+        message = allArgs.map((arg) => {
           if (typeof arg === "string") {
-            return arg;
+            return stripAnsiCodes(arg);
           }
           if (arg instanceof Error) {
             return `${arg.message}\n${arg.stack}`;
           }
-          return JSON.stringify(arg);
+          return JSON.stringify(arg, null, 2);
+        }).join(" ");
+      } else {
+        // 没有命名空间，所有参数都是消息
+        message = args.map((arg) => {
+          if (typeof arg === "string") {
+            return stripAnsiCodes(arg);
+          }
+          if (arg instanceof Error) {
+            return `${arg.message}\n${arg.stack}`;
+          }
+          return JSON.stringify(arg, null, 2);
         }).join(" ");
       }
     }
@@ -190,8 +227,9 @@ export const setupFileLogging = async (): Promise<void> => {
       level = "info";
     }
 
-    // 写入文件（异步，不阻塞）
-    fileLogger.writeLog(level, message).catch((error) => {
+    // 去除 ANSI 颜色代码后写入文件（异步，不阻塞）
+    const cleanMessage = stripAnsiCodes(message);
+    fileLogger.writeLog(level, cleanMessage).catch((error) => {
       console.error("Failed to write log to file:", error);
     });
   };

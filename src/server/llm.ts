@@ -48,6 +48,8 @@ export const createLLMCallFn = (config: LLMConfig): LLMCallFn => {
     onComplete: LLMCompleteCallback,
   ): Promise<void> => {
     log("Calling LLM with endpoint:", config.endpoint);
+    log("System prompt:", prompt);
+    log("Message window size:", messageWindow.length);
 
     if (!config.endpoint || !config.apiKey || !config.model) {
       throw new Error("LLM configuration is incomplete. Please set LLM_ENDPOINT, LLM_API_KEY, and LLM_MODEL environment variables.");
@@ -64,11 +66,13 @@ export const createLLMCallFn = (config: LLMConfig): LLMCallFn => {
           model: config.model,
           stream: true,
           messages: [
+            // prompt 作为第一条 system message
+            ...(prompt ? [{ role: "system", content: prompt }] : []),
+            // 然后是 messageWindow 中的消息
             ...messageWindow.map((msg) => ({
               role: msg.kind === "user" ? "user" : msg.kind === "assistant" ? "assistant" : "tool",
               content: msg.content,
             })),
-            { role: "user", content: prompt },
           ],
         }),
       });
