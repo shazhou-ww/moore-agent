@@ -7,10 +7,15 @@ const port = parseInt(process.env.PORT || "3000", 10);
 // 初始化文件日志
 setupFileLogging()
   .then(() => {
+    console.log(`Starting server on port ${port}...`);
     return startServer(port);
+  })
+  .then((server) => {
+    console.log(`Server started successfully on port ${port}`);
   })
   .catch((error) => {
     console.error("Failed to start server:", error);
+    console.error("Error details:", error instanceof Error ? error.stack : error);
     process.exit(1);
   });
 

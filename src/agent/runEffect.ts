@@ -3,12 +3,14 @@ import type {
   AssistantMessage,
   AssistantToolCall,
   ToolMessage,
+  UserMessage,
+  AssistantChunkSignal,
+  AssistantMessageCompleteSignal,
 } from "../types/schema.ts";
 import type {
   Effect,
   CallLLMEffect,
   CallToolEffect,
-  LLMResponse,
   LLMCallFn,
   ToolCallFn,
 } from "../types/effects.ts";
@@ -21,8 +23,18 @@ const log = debug("agent:runEffect");
 /**
  * 构建 prompt
  */
-const buildPrompt = (messageWindow: ReadonlyArray<Signal>): string => {
-  return messageWindow.map((msg) => `${msg.kind}: ${msg.content}`).join("\n");
+const buildPrompt = (
+  messageWindow: ReadonlyArray<UserMessage | ToolMessage | AssistantMessage>,
+): string => {
+  return messageWindow
+    .map((msg) => {
+      if (msg.kind === "user" || msg.kind === "tool" || msg.kind === "assistant") {
+        return `${msg.kind}: ${msg.content}`;
+      }
+      return "";
+    })
+    .filter((line) => line.length > 0)
+    .join("\n");
 };
 
 /**
@@ -47,6 +59,9 @@ type RunEffectDeps = {
   callTool: ToolCallFn;
 };
 
+// Chunk 合并配置
+const CHUNK_QUEUE_SIZE_THRESHOLD = 1000; // 当 queue 中的 chunk 内容超过这个长度时触发 signal
+
 /**
  * 创建 LLM effect 的初始器
  */
@@ -55,6 +70,7 @@ const createLLMEffectInitializer = (
   callLLM: LLMCallFn,
 ) => {
   let canceled = false;
+  const messageId = effect.key.replace("llm-", ""); // 从 key 中提取 messageId
 
   return {
     start: async (dispatch: (signal: Signal) => void) => {
@@ -66,26 +82,73 @@ const createLLMEffectInitializer = (
         const prompt = effect.prompt || buildPrompt(effect.messageWindow);
         log("Calling LLM with prompt:", prompt);
 
-        const response: LLMResponse = await callLLM(prompt, effect.messageWindow);
+        let chunkQueue: string[] = [];
+        let totalLength = 0;
+        let toolCalls: ReadonlyArray<{
+          id: string;
+          name: string;
+          input: Record<string, unknown>;
+        }> | undefined;
 
-        if (canceled) {
-          return;
-        }
-
-        const toolCalls = response.toolCalls
-          ? convertToolCalls(response.toolCalls)
-          : [];
-
-        const assistantMessage: AssistantMessage = {
-          id: createId(),
-          kind: "assistant",
-          content: response.content,
-          toolCalls,
-          timestamp: now(),
+        // 发送 chunk 的函数，带合并逻辑
+        const flushChunks = () => {
+          if (chunkQueue.length > 0 && !canceled) {
+            const mergedChunk = chunkQueue.join("");
+            const chunkSignal: AssistantChunkSignal = {
+              kind: "assistant-chunk",
+              messageId,
+              chunk: mergedChunk,
+              timestamp: now(),
+            };
+            dispatch(chunkSignal);
+            chunkQueue = [];
+            totalLength = 0;
+          }
         };
 
-        log("Dispatching assistant message with tool calls:", toolCalls.length);
-        dispatch(assistantMessage);
+        // 处理单个 chunk
+        const handleChunk = (chunk: string) => {
+          if (canceled) {
+            return;
+          }
+          chunkQueue.push(chunk);
+          totalLength += chunk.length;
+
+          // 如果 queue 中的内容超过阈值，触发 signal
+          if (totalLength >= CHUNK_QUEUE_SIZE_THRESHOLD) {
+            flushChunks();
+          }
+        };
+
+        // 处理完成
+        const handleComplete = (
+          completedToolCalls?: ReadonlyArray<{
+            id: string;
+            name: string;
+            input: Record<string, unknown>;
+          }>,
+        ) => {
+          if (canceled) {
+            return;
+          }
+
+          // 先 flush 剩余的 chunks
+          flushChunks();
+
+          // 发送完成信号
+          const completeSignal: AssistantMessageCompleteSignal = {
+            kind: "assistant-complete",
+            messageId,
+            toolCalls: completedToolCalls
+              ? convertToolCalls(completedToolCalls)
+              : [],
+            timestamp: now(),
+          };
+          dispatch(completeSignal);
+        };
+
+        // 调用 streaming LLM
+        await callLLM(prompt, effect.messageWindow, handleChunk, handleComplete);
       } catch (error) {
         if (!canceled) {
           log("LLM call failed:", error);

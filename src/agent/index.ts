@@ -78,6 +78,7 @@ export const createAgent = async (deps: AgentDeps): Promise<Agent> => {
         timestamp: now(),
       },
       messages: [],
+      partialMessage: null,
       lastSentToLLMAt: before(now(), 1),
     } as AgentState);
   }

@@ -30,11 +30,31 @@ export type ToolMessage = BaseMessage & {
   callId: string;
 };
 
-export type Signal = UserMessage | ToolMessage | AssistantMessage;
+export type AssistantChunkSignal = {
+  kind: "assistant-chunk";
+  messageId: string;
+  chunk: string;
+  timestamp: number;
+};
+
+export type AssistantMessageCompleteSignal = {
+  kind: "assistant-complete";
+  messageId: string;
+  toolCalls: AssistantToolCall[];
+  timestamp: number;
+};
+
+export type Signal = UserMessage | ToolMessage | AssistantMessage | AssistantChunkSignal | AssistantMessageCompleteSignal;
+
+export type PartialMessage = {
+  messageId: string;
+  chunks: string[];
+};
 
 export type AgentState = {
   systemMessage: SystemMessage;
-  messages: Signal[];
+  messages: (UserMessage | ToolMessage | AssistantMessage)[];
+  partialMessage: PartialMessage | null;
   lastSentToLLMAt: number;
 };
 

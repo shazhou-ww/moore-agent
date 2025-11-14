@@ -67,8 +67,66 @@ export const useAgent = (): UseAgentReturn => {
           setState((currentState) => {
             if (!currentState) return currentState;
             try {
-              const newState = baseTransition(agentEvent.signal)(currentState);
-              return newState;
+              // 处理 chunk 和 complete 信号
+              const signal = agentEvent.signal;
+              
+              if (signal.kind === "assistant-chunk") {
+                // 更新 partialMessage
+                if (currentState.partialMessage && currentState.partialMessage.messageId === signal.messageId) {
+                  // 追加 chunk
+                  return {
+                    ...currentState,
+                    partialMessage: {
+                      messageId: currentState.partialMessage.messageId,
+                      chunks: [...currentState.partialMessage.chunks, signal.chunk],
+                    },
+                  };
+                } else {
+                  // 创建新的 partialMessage
+                  return {
+                    ...currentState,
+                    partialMessage: {
+                      messageId: signal.messageId,
+                      chunks: [signal.chunk],
+                    },
+                  };
+                }
+              }
+              
+              if (signal.kind === "assistant-complete") {
+                // 从 partialMessage 拼装完整的 assistant message
+                if (currentState.partialMessage && currentState.partialMessage.messageId === signal.messageId) {
+                  const content = currentState.partialMessage.chunks.join("");
+                  const assistantMessage = {
+                    id: signal.messageId,
+                    kind: "assistant" as const,
+                    content,
+                    toolCalls: signal.toolCalls,
+                    timestamp: signal.timestamp,
+                  };
+                  
+                  // 插入消息并保持排序
+                  const newMessages = [...currentState.messages, assistantMessage].sort(
+                    (a, b) => a.timestamp - b.timestamp,
+                  );
+                  
+                  return {
+                    ...currentState,
+                    messages: newMessages,
+                    partialMessage: null,
+                    lastSentToLLMAt: signal.timestamp,
+                  };
+                }
+              }
+              
+              // 其他信号（user, tool）使用 transition
+              if (signal.kind === "user" || signal.kind === "tool") {
+                const newState = baseTransition(signal)(currentState);
+                return newState;
+              }
+              
+              // 未知信号类型，返回原状态
+              return currentState;
             } catch (error) {
               // 前端忽略无效的 timestamp，返回原状态
               console.warn("Invalid timestamp, ignoring signal:", error);
@@ -79,7 +137,7 @@ export const useAgent = (): UseAgentReturn => {
           // 如果收到 user message 的 signal，说明该消息已被确认，从 pendingMessages 中移除
           if (agentEvent.signal.kind === "user") {
             setPendingMessages((prev) =>
-              prev.filter((msg) => msg.id !== agentEvent.signal.id)
+              prev.filter((msg) => msg.id === (agentEvent.signal as UserMessage).id)
             );
           }
         }

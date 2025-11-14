@@ -1,12 +1,14 @@
-import type { FrozenJson } from "@hstore/core";
+import type { freezeJson, FrozenJson } from "@hstore/core";
 import type {
   AgentState,
   AssistantMessage,
   ToolMessage,
   UserMessage,
+  PartialMessage,
 } from "../types/schema.ts";
 import type { Effect } from "../types/effects.ts";
-import { makeLLMEffectKey, makeToolEffectKey } from "../utils/id.ts";
+import type { MessageWindow } from "../types/schema.ts";
+import { makeLLMEffectKey, makeToolEffectKey, createId } from "../utils/id.ts";
 
 /**
  * 获取 lastSentToLLMAt 之后的所有消息
@@ -71,6 +73,29 @@ const getUnfulfilledToolCalls = (
  * 根据状态推导需要执行的 effects
  */
 export const effectsAt = (state: FrozenJson<AgentState>): Effect[] => {
+  // 0. 优先检查是否有未完成的 assistant message
+  if (state.partialMessage) {
+    // 构建继续补全的 LLM call
+    const pendingMessages = getMessagesAfterLastSent(
+      state.messages as ReadonlyArray<UserMessage | ToolMessage | AssistantMessage>,
+      state.lastSentToLLMAt,
+    );
+    
+    // 如果有待发送的消息，需要包含它们
+    // 同时需要提示 LLM 基于之前的内容继续补全
+    const existingContent = Array.from(state.partialMessage.chunks).join("");
+    const continuationPrompt = `Continue from: "${existingContent}"`;
+    
+    return [
+      {
+        key: makeLLMEffectKey(state.partialMessage.messageId),
+        kind: "call-llm",
+        prompt: continuationPrompt,
+        messageWindow: pendingMessages as MessageWindow,
+      },
+    ];
+  }
+
   // 1. 先检查待执行的工具调用
   const latestAssistantMessage = getLatestAssistantMessage(
     state.messages as ReadonlyArray<UserMessage | ToolMessage | AssistantMessage>,
@@ -108,19 +133,19 @@ export const effectsAt = (state: FrozenJson<AgentState>): Effect[] => {
   );
   
   if (pendingMessages.length > 0) {
-    // 选择最后一条消息的 id 作为 key
-    const lastMessage = pendingMessages[pendingMessages.length - 1]!;
+    // 生成新的 messageId 用于 assistant message
+    const newMessageId = createId();
     return [
       {
-        key: makeLLMEffectKey(lastMessage.id),
+        key: makeLLMEffectKey(newMessageId),
         kind: "call-llm",
         prompt: "", // prompt 将在 runEffect 中构建
-        messageWindow: pendingMessages,
+        messageWindow: pendingMessages as MessageWindow,
       },
     ];
   }
   
-  // 3. 若以上两项均不存在，则返回空数组，表示当前 idle
+  // 3. 若以上各项均不存在，则返回空数组，表示当前 idle
   return [];
 };
 

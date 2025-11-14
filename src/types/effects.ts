@@ -1,4 +1,4 @@
-import type { MessageWindow, Signal } from "./schema.ts";
+import type { MessageWindow, UserMessage, ToolMessage, AssistantMessage } from "./schema.ts";
 
 export type CallLLMEffect = {
   key: `llm-${string}`;
@@ -21,24 +21,28 @@ export type CallToolEffect = {
 export type Effect = CallLLMEffect | CallToolEffect;
 
 /**
- * LLM 响应类型
+ * LLM streaming chunk 回调
  */
-export type LLMResponse = {
-  content: string;
-  toolCalls?: ReadonlyArray<{
-    id: string;
-    name: string;
-    input: Record<string, unknown>;
-  }>;
-};
+export type LLMChunkCallback = (chunk: string) => void;
 
 /**
- * LLM 调用函数类型
+ * LLM streaming 完成回调
+ */
+export type LLMCompleteCallback = (toolCalls?: ReadonlyArray<{
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+}>) => void;
+
+/**
+ * LLM 调用函数类型 - 支持 streaming
  */
 export type LLMCallFn = (
   prompt: string,
-  messageWindow: ReadonlyArray<Signal>,
-) => Promise<LLMResponse>;
+  messageWindow: ReadonlyArray<UserMessage | ToolMessage | AssistantMessage>,
+  onChunk: LLMChunkCallback,
+  onComplete: LLMCompleteCallback,
+) => Promise<void>;
 
 /**
  * 工具调用函数类型

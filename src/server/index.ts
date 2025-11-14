@@ -172,6 +172,7 @@ export const startServer = async (port: number = 3000) => {
 
   const server = app.listen(port, () => {
     log(`Server running on http://localhost:${port}`);
+    console.log(`Server running on http://localhost:${port}`);
   });
 
   return server;

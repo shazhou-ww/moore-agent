@@ -53,13 +53,28 @@ export const ChatInterface = ({
     (msg) => !confirmedMessageIds.has(msg.id)
   );
 
+  // 将 partial message 转换为临时的 assistant message 用于显示
+  const partialAssistantMessage = currentState.partialMessage ? {
+    id: currentState.partialMessage.messageId,
+    kind: "assistant" as const,
+    content: currentState.partialMessage.chunks.join(""),
+    toolCalls: [],
+    timestamp: Date.now(), // 使用当前时间作为临时 timestamp
+  } : null;
+
   const allMessages = [
     ...currentState.messages,
+    ...(partialAssistantMessage ? [partialAssistantMessage] : []),
     ...unconfirmedMessages,
   ].sort((a, b) => a.timestamp - b.timestamp);
 
   // 创建未确认消息的 ID 集合，用于样式判断
   const unconfirmedMessageIds = new Set(unconfirmedMessages.map((msg) => msg.id));
+  
+  // 创建 partial message 的 ID 集合，用于样式判断（显示为流式输出）
+  const partialMessageIds = currentState.partialMessage 
+    ? new Set([currentState.partialMessage.messageId])
+    : new Set<string>();
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -161,10 +176,26 @@ export const ChatInterface = ({
                     opacity: unconfirmedMessageIds.has(message.id) ? 0.6 : 1,
                     border: unconfirmedMessageIds.has(message.id)
                       ? "1px dashed"
+                      : partialMessageIds.has(message.id)
+                      ? "1px solid"
                       : "none",
                     borderColor: unconfirmedMessageIds.has(message.id)
                       ? "primary.main"
+                      : partialMessageIds.has(message.id)
+                      ? "secondary.main"
                       : "transparent",
+                    // Partial message 添加闪烁动画效果
+                    animation: partialMessageIds.has(message.id)
+                      ? "pulse 1.5s ease-in-out infinite"
+                      : "none",
+                    "@keyframes pulse": {
+                      "0%, 100%": {
+                        opacity: 1,
+                      },
+                      "50%": {
+                        opacity: 0.8,
+                      },
+                    },
                   }}
                 >
                   <Typography variant="body1" sx={{ whiteSpace: "pre-wrap" }}>
