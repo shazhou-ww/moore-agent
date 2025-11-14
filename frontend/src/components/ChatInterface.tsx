@@ -15,10 +15,11 @@ import PersonIcon from "@mui/icons-material/Person";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
 import BuildIcon from "@mui/icons-material/Build";
 import type { AgentState } from "../types.ts";
+import type { FrozenJson } from "@hstore/core";
 import { useAgent } from "../hooks/useAgent.ts";
 
 type ChatInterfaceProps = {
-  state: AgentState;
+  state: FrozenJson<AgentState>;
 };
 
 export const ChatInterface = ({ state: initialState }: ChatInterfaceProps) => {

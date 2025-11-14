@@ -1,16 +1,17 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import type { AgentState, AgentEvent, Signal } from "../types.ts";
-import { transition } from "../agent/transition.ts";
+import type { AgentState, AgentEvent } from "../types.ts";
+import type { FrozenJson } from "@hstore/core";
+import { transition as baseTransition } from "@/agent/transition.ts";
 
 type UseAgentReturn = {
-  state: AgentState | null;
+  state: FrozenJson<AgentState> | null;
   isLoading: boolean;
   sendMessage: (message: string) => Promise<void>;
   pendingMessages: string[];
 };
 
 export const useAgent = (): UseAgentReturn => {
-  const [state, setState] = useState<AgentState | null>(null);
+  const [state, setState] = useState<FrozenJson<AgentState> | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [pendingMessages, setPendingMessages] = useState<string[]>([]);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -45,8 +46,14 @@ export const useAgent = (): UseAgentReturn => {
           // 根据 signal 更新前端状态
           setState((currentState) => {
             if (!currentState) return currentState;
-            const newState = transition(agentEvent.signal)(currentState);
-            return newState;
+            try {
+              const newState = baseTransition(agentEvent.signal)(currentState);
+              return newState;
+            } catch (error) {
+              // 前端忽略无效的 timestamp，返回原状态
+              console.warn("Invalid timestamp, ignoring signal:", error);
+              return currentState;
+            }
           });
 
           // 如果收到 assistant 消息，移除对应的 pending message

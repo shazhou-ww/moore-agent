@@ -10,9 +10,9 @@ import type {
  * 将消息插入 messages 并保持按 timestamp 排序
  */
 const insertMessage = (
-  messages: ReadonlyArray<Signal>,
+  messages: ReadonlyArray<Signal> | Signal[],
   newMessage: Signal,
-): ReadonlyArray<Signal> => {
+): Signal[] => {
   const result = [...messages];
   let insertIndex = result.length;
   
@@ -63,10 +63,13 @@ const isValidTimestamp = (
 };
 
 /**
- * 状态转换函数
+ * 状态转换函数（通用版本）
  * 将信号应用到状态，返回新状态
+ * 支持 AgentState 和 FrozenJson<AgentState> 类型
  */
-export const transition = (signal: Signal) => (state: FrozenJson<AgentState>): FrozenJson<AgentState> => {
+export const transition = <T extends AgentState | FrozenJson<AgentState>>(
+  signal: Signal,
+) => (state: T): T => {
   // 验证 timestamp
   if (!isValidTimestamp(signal.timestamp, state.lastSentToLLMAt)) {
     throw new Error(
@@ -75,12 +78,12 @@ export const transition = (signal: Signal) => (state: FrozenJson<AgentState>): F
   }
   
   // 插入消息并保持排序
-  const newMessages = insertMessage(state.messages as ReadonlyArray<Signal>, signal);
+  const newMessages = insertMessage(state.messages, signal);
   
   // 返回新状态
   return {
     ...state,
     messages: newMessages,
-  } as FrozenJson<AgentState>;
+  } as T;
 };
 

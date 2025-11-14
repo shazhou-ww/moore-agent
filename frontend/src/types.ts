@@ -1,3 +1,5 @@
+import type { FrozenJson } from "@hstore/core";
+
 export type BaseMessage = {
   id: string;
   content: string;
@@ -38,7 +40,7 @@ export type AgentState = {
 
 export type AgentEvent =
   | { type: "signal-received"; signal: Signal; effectCount: number }
-  | { type: "state-updated"; state: AgentState; effectCount: number }
+  | { type: "state-updated"; state: FrozenJson<AgentState>; effectCount: number }
   | { type: "effect-started"; effect: any; effectCount: number }
   | { type: "effect-completed"; effect: any; effectCount: number }
   | { type: "effect-canceled"; effect: any; effectCount: number }
