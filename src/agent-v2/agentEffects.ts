@@ -15,6 +15,8 @@ import type { ActionDefinition, HistoryMessage, ActionRequest } from "./agentSta
  * 
  * 输出：
  * - 结构化决策结果（取消哪些 action、新开哪些 action、或者直接回复）
+ * 
+ * 注意：Reaction 是 non-streaming 的，直接返回决策结果
  */
 export type ReactionEffect = {
   key: string; // 用于 moorex 的 HasKey 约束，例如 "reaction-{messageId}"
@@ -44,28 +46,33 @@ export type ReactionEffect = {
  * 
  * 输入：
  * - 系统提示词
- * - 历史消息窗口
- * - 当前状态（包括 action responses、ongoing actions 等）
+ * - 相关的历史消息（由 lastHistoryMessageId 和相关消息确定）
+ * - 相关的 action requests 和 responses（由 relatedActionIds 确定）
+ * 
+ * key 生成方式：hash(lastHistoryMessageId + sorted actionIds)
  */
 export type ReplyToUserEffect = {
-  key: string; // 用于 moorex 的 HasKey 约束，例如 "reply-{messageId}"
+  key: string; // hash(lastHistoryMessageId + sorted actionIds)，例如 "reply-{hash}"
   kind: "reply-to-user";
   systemPrompts: string;
-  messageWindow: HistoryMessage[];
-  // 用于生成回复的上下文信息
-  context: {
-    recentActionResponses?: Array<{
-      actionRequestId: string;
-      actionName: string;
-      type: "completed" | "cancelled";
-      result?: string; // 仅当 type 为 'completed' 时存在
-    }>;
-    ongoingActions?: Array<{
-      actionRequestId: string;
-      actionName: string;
-      intention: string;
-    }>;
-  };
+  // 相关的历史消息（包含从某个起点到 lastHistoryMessageId 的所有消息）
+  relatedHistoryMessages: HistoryMessage[];
+  // 最后一条相关的 history message id
+  lastHistoryMessageId: string;
+  // 相关的 action ids（已排序）
+  relatedActionIds: string[];
+  // 相关的 action requests 和 responses（由 relatedActionIds 确定）
+  relatedActionRequests: Array<{
+    actionRequestId: string;
+    actionName: string;
+    parameters: string;
+    intention: string;
+  }>;
+  relatedActionResponses: Array<{
+    actionRequestId: string;
+    type: "completed" | "cancelled";
+    result?: string; // 仅当 type 为 'completed' 时存在
+  }>;
 };
 
 /**

@@ -9,11 +9,10 @@ export const actionDefinitionSchema = z.object({
 });
 
 /**
- * Action 请求详情 Schema
+ * Action 请求详情 Schema（不包含 parameters，parameters 单独存储）
  */
 export const actionRequestSchema = z.object({
   actionName: z.string(),
-  parameters: z.string(), // JSON 字符串
   intention: z.string(), // 描述 action 的目的
   timestamp: z.number(),
 });
@@ -52,12 +51,14 @@ export const assistantChunkSchema = z.object({
 });
 
 /**
- * Pending Streaming Schema - 正在进行的 streaming 操作
+ * Reply To User Context Schema - 回复用户的上下文信息
+ * 每个 reply 对应一个 context，包含相关的 history messages 和 action ids
  */
-export const pendingStreamingSchema = z.object({
+export const replyToUserContextSchema = z.object({
   messageId: z.string(), // 用于关联 chunks 和 complete signal
-  kind: z.enum(["reaction", "reply"]), // 标识是哪种 streaming
-  chunks: z.array(assistantChunkSchema),
+  lastHistoryMessageId: z.string(), // 最后一条相关的 history message id
+  relatedActionIds: z.array(z.string()), // 相关的 action request ids（已排序）
+  chunks: z.array(assistantChunkSchema), // 正在 stream 的 chunks
 });
 
 /**
@@ -70,21 +71,25 @@ export const agentStateSchema = z.object({
   // 2. 当前 Agent 的 Action 定义
   actions: z.record(z.string(), actionDefinitionSchema),
 
-  // 3. 当前 Agent 已经发起的 action requests
+  // 3. 当前 Agent 已经发起的 action requests（不包含 parameters）
   actionRequests: z.record(z.string(), actionRequestSchema),
 
-  // 4. 当前 Agent 已经完成的 action request 的结果
+  // 4. Action 请求的参数（JSON 字符串），key 是 actionRequestId
+  actionParameters: z.record(z.string(), z.string()),
+
+  // 5. 当前 Agent 已经完成的 action request 的结果
   actionResponses: z.record(z.string(), actionResponseSchema),
 
-  // 5. Agent 和用户之间往来的历史消息（不包含 Agent 和 action 之间的消息）
+  // 6. Agent 和用户之间往来的历史消息（不包含 Agent 和 action 之间的消息）
   historyMessages: z.array(historyMessageSchema),
 
-  // 6. 最近一次调用 LLM 的时间戳
-  lastSentToLLMAt: z.number(),
+  // 7. 最近一次收到 reaction 结果的时间戳
+  lastReactionTimestamp: z.number(),
 
-  // 7. 正在进行的 streaming 操作（如果有）
-  // 注意：通常应该只有一个活跃的 LLM call，所以使用 nullable
-  pendingStreaming: pendingStreamingSchema.nullable(),
+  // 8. 正在进行的 reply to user streaming 操作
+  // key 是 messageId（即 hash(lastHistoryMessageId + sorted actionIds)），value 是对应的 context
+  // 这与 ReplyToUserEffect 的 key 保持一致
+  replies: z.record(z.string(), replyToUserContextSchema),
 });
 
 // ==================== 类型导出 ====================
@@ -115,9 +120,9 @@ export type HistoryMessage = z.infer<typeof historyMessageSchema>;
 export type AssistantChunk = z.infer<typeof assistantChunkSchema>;
 
 /**
- * Pending Streaming - 正在进行的 streaming 操作
+ * Reply To User Context - 回复用户的上下文信息
  */
-export type PendingStreaming = z.infer<typeof pendingStreamingSchema>;
+export type ReplyToUserContext = z.infer<typeof replyToUserContextSchema>;
 
 /**
  * AgentState - Agent 的完整状态
