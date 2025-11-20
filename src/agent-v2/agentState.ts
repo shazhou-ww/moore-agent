@@ -20,11 +20,19 @@ export const actionRequestSchema = z.object({
 
 /**
  * Action 响应详情 Schema
+ * 支持两种类型：用户取消（cancelled）和正常完成（completed）
  */
-export const actionResponseSchema = z.object({
-  result: z.string(), // 结果字符串（成功或失败信息）
-  timestamp: z.number(),
-});
+export const actionResponseSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("cancelled"),
+    timestamp: z.number(),
+  }),
+  z.object({
+    type: z.literal("completed"),
+    result: z.string(), // 结果字符串（成功或失败信息）
+    timestamp: z.number(),
+  }),
+]);
 
 /**
  * 历史消息 Schema
@@ -44,6 +52,15 @@ export const assistantChunkSchema = z.object({
 });
 
 /**
+ * Pending Streaming Schema - 正在进行的 streaming 操作
+ */
+export const pendingStreamingSchema = z.object({
+  messageId: z.string(), // 用于关联 chunks 和 complete signal
+  kind: z.enum(["reaction", "reply"]), // 标识是哪种 streaming
+  chunks: z.array(assistantChunkSchema),
+});
+
+/**
  * AgentState Schema - Agent 的完整状态
  */
 export const agentStateSchema = z.object({
@@ -59,17 +76,15 @@ export const agentStateSchema = z.object({
   // 4. 当前 Agent 已经完成的 action request 的结果
   actionResponses: z.record(z.string(), actionResponseSchema),
 
-  // 5. 当前 Assistant 关注的 action request
-  focusedActionRequests: z.array(z.string()), // action request id 数组
-
-  // 6. Agent 和用户之间往来的历史消息（不包含 Agent 和 action 之间的消息）
+  // 5. Agent 和用户之间往来的历史消息（不包含 Agent 和 action 之间的消息）
   historyMessages: z.array(historyMessageSchema),
 
-  // 7. 最近一次调用 LLM 的时间戳
+  // 6. 最近一次调用 LLM 的时间戳
   lastSentToLLMAt: z.number(),
 
-  // 8. 尚未完成 streaming 的 assistant chunks
-  pendingChunks: z.array(assistantChunkSchema),
+  // 7. 正在进行的 streaming 操作（如果有）
+  // 注意：通常应该只有一个活跃的 LLM call，所以使用 nullable
+  pendingStreaming: pendingStreamingSchema.nullable(),
 });
 
 // ==================== 类型导出 ====================
@@ -98,6 +113,11 @@ export type HistoryMessage = z.infer<typeof historyMessageSchema>;
  * Assistant Streaming Chunk
  */
 export type AssistantChunk = z.infer<typeof assistantChunkSchema>;
+
+/**
+ * Pending Streaming - 正在进行的 streaming 操作
+ */
+export type PendingStreaming = z.infer<typeof pendingStreamingSchema>;
 
 /**
  * AgentState - Agent 的完整状态

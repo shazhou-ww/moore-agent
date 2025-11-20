@@ -11,10 +11,10 @@ export const userMessageReceivedSignalSchema = z.object({
 });
 
 /**
- * Action Responded Signal Schema - 一个 Action 调用返回（成功或失败）
+ * Action Completed Signal Schema - 一个 Action 调用正常完成
  */
-export const actionRespondedSignalSchema = z.object({
-  kind: z.literal("action-responded"),
+export const actionCompletedSignalSchema = z.object({
+  kind: z.literal("action-completed"),
   actionRequestId: z.string(),
   result: z.string(), // 结果字符串（成功或失败信息）
   timestamp: z.number(),
@@ -33,10 +33,11 @@ export const actionRequestedSignalSchema = z.object({
 });
 
 /**
- * Action Cancelled Signal Schema - Agent 取消一个 Action Request
+ * Action Cancelled By User Signal Schema - 用户主动取消一个 Action Request
+ * 注意：用户取消的 action 不会从 actionRequests 中移除，以便告知 LLM 这是用户主动取消的
  */
-export const actionCancelledSignalSchema = z.object({
-  kind: z.literal("action-cancelled"),
+export const actionCancelledByUserSignalSchema = z.object({
+  kind: z.literal("action-cancelled-by-user"),
   actionRequestId: z.string(),
   timestamp: z.number(),
 });
@@ -46,12 +47,13 @@ export const actionCancelledSignalSchema = z.object({
  */
 export const assistantChunkReceivedSignalSchema = z.object({
   kind: z.literal("assistant-chunk-received"),
+  messageId: z.string(), // 用于关联 chunks 和 complete signal
   chunk: z.string(),
   timestamp: z.number(),
 });
 
 /**
- * Assistant Message Complete Signal Schema - LLM Streaming 结束
+ * Assistant Message Complete Signal Schema - LLM Streaming 结束（用于 reply）
  */
 export const assistantMessageCompleteSignalSchema = z.object({
   kind: z.literal("assistant-message-complete"),
@@ -60,15 +62,35 @@ export const assistantMessageCompleteSignalSchema = z.object({
 });
 
 /**
+ * Reaction Complete Signal Schema - Reaction Effect 完成
+ * Reaction 是基于最近的输入（user message 或 action responses）让 LLM 做下一步动作的规划
+ */
+export const reactionCompleteSignalSchema = z.object({
+  kind: z.literal("reaction-complete"),
+  messageId: z.string(), // 关联到 ReactionEffect 的 messageId
+  // 决策结果：取消哪些、新开哪些、或回复
+  decisions: z.object({
+    cancelActions: z.array(z.string()), // actionRequestIds 需要取消的
+    newActions: z.array(z.object({
+      actionName: z.string(),
+      initialIntent: z.string(), // 初始意图，用于后续 RefineActionCallEffect
+    })),
+    shouldReply: z.boolean(), // 是否直接回复用户
+  }),
+  timestamp: z.number(),
+});
+
+/**
  * AgentSignal Schema - Agent 接收到的信号
  */
 export const agentSignalSchema = z.union([
   userMessageReceivedSignalSchema,
-  actionRespondedSignalSchema,
+  actionCompletedSignalSchema,
   actionRequestedSignalSchema,
-  actionCancelledSignalSchema,
+  actionCancelledByUserSignalSchema,
   assistantChunkReceivedSignalSchema,
   assistantMessageCompleteSignalSchema,
+  reactionCompleteSignalSchema,
 ]);
 
 // ==================== 类型导出 ====================
@@ -81,10 +103,10 @@ export type UserMessageReceivedSignal = z.infer<
 >;
 
 /**
- * Action Responded Signal - 一个 Action 调用返回（成功或失败）
+ * Action Completed Signal - 一个 Action 调用正常完成
  */
-export type ActionRespondedSignal = z.infer<
-  typeof actionRespondedSignalSchema
+export type ActionCompletedSignal = z.infer<
+  typeof actionCompletedSignalSchema
 >;
 
 /**
@@ -95,10 +117,10 @@ export type ActionRequestedSignal = z.infer<
 >;
 
 /**
- * Action Cancelled Signal - Agent 取消一个 Action Request
+ * Action Cancelled By User Signal - 用户主动取消一个 Action Request
  */
-export type ActionCancelledSignal = z.infer<
-  typeof actionCancelledSignalSchema
+export type ActionCancelledByUserSignal = z.infer<
+  typeof actionCancelledByUserSignalSchema
 >;
 
 /**
@@ -109,10 +131,17 @@ export type AssistantChunkReceivedSignal = z.infer<
 >;
 
 /**
- * Assistant Message Complete Signal - LLM Streaming 结束
+ * Assistant Message Complete Signal - LLM Streaming 结束（用于 reply）
  */
 export type AssistantMessageCompleteSignal = z.infer<
   typeof assistantMessageCompleteSignalSchema
+>;
+
+/**
+ * Reaction Complete Signal - Reaction Effect 完成
+ */
+export type ReactionCompleteSignal = z.infer<
+  typeof reactionCompleteSignalSchema
 >;
 
 /**
