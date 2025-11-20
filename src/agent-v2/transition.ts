@@ -3,24 +3,38 @@ import type { AgentState, HistoryMessage, AssistantChunk } from "./agentState.ts
 import type { AgentSignal } from "./agentSignal.ts";
 
 /**
- * 将消息插入 historyMessages 并保持按 timestamp 排序
+ * 将消息追加到 historyMessages 的末尾
+ * 
+ * 假设新消息的 timestamp 一定晚于最后一个消息。
+ * 如果 timestamp 不满足条件，会 log warning 并返回 null。
+ * 
+ * @returns 如果成功追加，返回新的消息数组；如果不满足条件，返回 null
  */
-const insertHistoryMessage = (
+const appendHistoryMessage = (
   messages: ReadonlyArray<HistoryMessage>,
   newMessage: HistoryMessage,
-): ReadonlyArray<HistoryMessage> => {
-  const result = [...messages] as HistoryMessage[];
-  let insertIndex = result.length;
-  
-  for (let i = 0; i < result.length; i++) {
-    if (newMessage.timestamp < result[i]!.timestamp) {
-      insertIndex = i;
-      break;
-    }
+): ReadonlyArray<HistoryMessage> | null => {
+  // 如果 historyMessages 为空，直接追加
+  if (messages.length === 0) {
+    return [newMessage];
   }
+
+  // 检查新消息的 timestamp 是否晚于最后一个消息
+  const lastMessage = messages[messages.length - 1]!;
+  if (newMessage.timestamp >= lastMessage.timestamp) {
+    // 直接追加到末尾
+    return [...messages, newMessage];
+  }
+
+  // timestamp 不满足条件，log warning 并返回 null
+  const messageType = newMessage.type === "user" ? "user message" : "assistant message";
+  console.warn(
+    `Ignoring ${messageType} with timestamp ${newMessage.timestamp} ` +
+    `(messageId: ${newMessage.id}). Last message timestamp: ${lastMessage.timestamp}. ` +
+    `This message would break the effectsAt calculation assumption.`
+  );
   
-  result.splice(insertIndex, 0, newMessage);
-  return result as ReadonlyArray<HistoryMessage>;
+  return null;
 };
 
 /**
@@ -38,8 +52,12 @@ const isValidTimestamp = (
  * 处理 user-message-received 信号
  * 
  * Transition 效果：
- * - 将用户消息添加到 historyMessages，保持按 timestamp 排序
+ * - 假设收到的 userMessage 的 timestamp 一定是晚于 historyMessages 的最后一个的
+ * - 如果 timestamp 晚于最后一个消息，直接追加到 historyMessages 的末尾
+ * - 如果 timestamp 不满足条件，log warning 并忽略这条 message（不更新状态）
  * - 不更新 lastSentToLLMAt（用户消息不是 LLM 输出）
+ * 
+ * 注意：我们不会将消息插入到 historyMessages 中间，因为这会影响 effectsAt 的计算假设
  */
 const handleUserMessageReceived = <T extends AgentState | FrozenJson<AgentState>>(
   signal: Extract<AgentSignal, { kind: "user-message-received" }>,
@@ -52,10 +70,16 @@ const handleUserMessageReceived = <T extends AgentState | FrozenJson<AgentState>
     timestamp: signal.timestamp,
   };
 
-  const newHistoryMessages = insertHistoryMessage(
-    state.historyMessages as ReadonlyArray<HistoryMessage>,
+  const historyMessages = state.historyMessages as ReadonlyArray<HistoryMessage>;
+  const newHistoryMessages = appendHistoryMessage(
+    historyMessages,
     userMessage,
   );
+
+  // 如果追加失败（返回 null），返回原状态
+  if (newHistoryMessages === null) {
+    return state;
+  }
 
   return {
     ...state,
@@ -177,10 +201,14 @@ const handleAssistantChunkReceived = <T extends AgentState | FrozenJson<AgentSta
  * 处理 assistant-message-complete 信号
  * 
  * Transition 效果：
+ * - 假设收到的 signal 的 timestamp 一定是晚于 historyMessages 的最后一个的
  * - 将 pendingChunks 合并成完整的 assistant 消息内容
- * - 将完整的 assistant 消息添加到 historyMessages，保持按 timestamp 排序
+ * - 如果 timestamp 晚于最后一个消息，直接追加到 historyMessages 的末尾
+ * - 如果 timestamp 不满足条件，log warning 并忽略这条 message（清空 pendingChunks，但不更新 historyMessages 和 lastSentToLLMAt）
  * - 清空 pendingChunks
- * - 更新 lastSentToLLMAt 为 signal.timestamp（表示 LLM 输出已完成）
+ * - 更新 lastSentToLLMAt 为 signal.timestamp（仅当消息被接受时）
+ * 
+ * 注意：我们不会将消息插入到 historyMessages 中间，因为这会影响 effectsAt 的计算假设
  */
 const handleAssistantMessageComplete = <T extends AgentState | FrozenJson<AgentState>>(
   signal: Extract<AgentSignal, { kind: "assistant-message-complete" }>,
@@ -196,23 +224,26 @@ const handleAssistantMessageComplete = <T extends AgentState | FrozenJson<AgentS
     timestamp: signal.timestamp,
   };
 
-  // 插入消息并保持排序
-  const newHistoryMessages = insertHistoryMessage(
-    state.historyMessages as ReadonlyArray<HistoryMessage>,
+  const historyMessages = state.historyMessages as ReadonlyArray<HistoryMessage>;
+  const newHistoryMessages = appendHistoryMessage(
+    historyMessages,
     assistantMessage,
   );
 
-  // 清空 pending chunks
-  const newPendingChunks: AssistantChunk[] = [];
+  // 如果追加失败（返回 null），清空 pendingChunks 但不更新 historyMessages 和 lastSentToLLMAt
+  if (newHistoryMessages === null) {
+    return {
+      ...state,
+      pendingChunks: [],
+    } as T;
+  }
 
-  // 更新 lastSentToLLMAt
-  const newLastSentToLLMAt = signal.timestamp;
-
+  // 成功追加，更新所有相关状态
   return {
     ...state,
     historyMessages: newHistoryMessages,
-    pendingChunks: newPendingChunks,
-    lastSentToLLMAt: newLastSentToLLMAt,
+    pendingChunks: [],
+    lastSentToLLMAt: signal.timestamp,
   } as T;
 };
 
