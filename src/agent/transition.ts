@@ -81,7 +81,7 @@ const handleAssistantChunk = (
         messageId: state.partialMessage.messageId,
         chunks: [...Array.from(state.partialMessage.chunks), signal.chunk],
       },
-    } as Immutable<AgentState>;
+    };
   }
 
   // 如果没有 partialMessage 或 messageId 不匹配，创建新的
@@ -91,7 +91,7 @@ const handleAssistantChunk = (
       messageId: signal.messageId,
       chunks: [signal.chunk],
     },
-  } as Immutable<AgentState>;
+  };
 };
 
 /**
@@ -129,7 +129,7 @@ const handleAssistantComplete = (
     messages: newMessages,
     partialMessage: newPartialMessage,
     lastSentToLLMAt: newLastSentToLLMAt,
-  } as Immutable<AgentState>;
+  };
 };
 
 /**
@@ -148,11 +148,11 @@ export const transition = (
 
   // 处理不同类型的信号
   if (signal.kind === "assistant-chunk") {
-    return handleAssistantChunk(signal, state) as Immutable<AgentState>;
+    return handleAssistantChunk(signal, state);
   }
 
   if (signal.kind === "assistant-complete") {
-    return handleAssistantComplete(signal, state) as Immutable<AgentState>;
+    return handleAssistantComplete(signal, state);
   }
 
   // 处理 user 和 tool 消息
@@ -161,7 +161,7 @@ export const transition = (
     return {
       ...state,
       messages: newMessages,
-    } as Immutable<AgentState>;
+    };
   }
   
   // 未知信号类型

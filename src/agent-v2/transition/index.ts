@@ -35,25 +35,25 @@ export const transition = (
   // 处理不同类型的信号
   switch (signal.kind) {
     case "user-message-received":
-      return handleUserMessageReceived(signal, state) as Immutable<AgentState>;
+      return handleUserMessageReceived(signal, state);
 
     case "action-completed":
-      return handleActionCompleted(signal, state) as Immutable<AgentState>;
+      return handleActionCompleted(signal, state);
 
     case "action-request-refined":
-      return handleActionRequestRefined(signal, state) as Immutable<AgentState>;
+      return handleActionRequestRefined(signal, state);
 
     case "action-cancelled-by-user":
-      return handleActionCancelledByUser(signal, state) as Immutable<AgentState>;
+      return handleActionCancelledByUser(signal, state);
 
     case "assistant-chunk-received":
-      return handleAssistantChunkReceived(signal, state) as Immutable<AgentState>;
+      return handleAssistantChunkReceived(signal, state);
 
     case "assistant-message-complete":
-      return handleAssistantMessageComplete(signal, state) as Immutable<AgentState>;
+      return handleAssistantMessageComplete(signal, state);
 
     case "reaction-complete":
-      return handleReactionComplete(signal, state) as Immutable<AgentState>;
+      return handleReactionComplete(signal, state);
 
     default:
       // 类型守卫：确保所有信号类型都被处理

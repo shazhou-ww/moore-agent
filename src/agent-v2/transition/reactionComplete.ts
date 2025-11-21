@@ -38,7 +38,7 @@ const handleReplyToUserDecision = (
     ...state,
     replies: newReplies,
     lastReactionTimestamp: timestamp,
-  } as Immutable<AgentState>;
+  };
 };
 
 /**
@@ -90,7 +90,7 @@ const handleAdjustActionsDecision = (
     actionRequests: newActionRequests,
     actionResponses: newActionResponses,
     lastReactionTimestamp: timestamp,
-  } as Immutable<AgentState>;
+  };
 };
 
 /**
@@ -114,7 +114,7 @@ const handleNoopDecision = (
   return {
     ...state,
     lastReactionTimestamp: timestamp,
-  } as Immutable<AgentState>;
+  };
 };
 
 /**
@@ -145,6 +145,6 @@ export const handleReactionComplete = (
   return {
     ...state,
     lastReactionTimestamp: signal.timestamp,
-  } as Immutable<AgentState>;
+  };
 };
 

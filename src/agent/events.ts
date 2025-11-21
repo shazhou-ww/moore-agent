@@ -25,22 +25,22 @@ export const createEventHandlers = (
   return (event: AgentEvent) => {
     switch (event.type) {
       case "signal-received":
-        handlers.onSignalReceived?.(event.signal as Immutable<Signal>);
+        handlers.onSignalReceived?.(event.signal);
         break;
       case "state-updated":
-        handlers.onStateUpdated?.(event.state as Immutable<AgentState>);
+        handlers.onStateUpdated?.(event.state);
         break;
       case "effect-started":
-        handlers.onEffectStarted?.(event.effect as Immutable<Effect>);
+        handlers.onEffectStarted?.(event.effect);
         break;
       case "effect-completed":
-        handlers.onEffectCompleted?.(event.effect as Immutable<Effect>);
+        handlers.onEffectCompleted?.(event.effect);
         break;
       case "effect-canceled":
-        handlers.onEffectCanceled?.(event.effect as Immutable<Effect>);
+        handlers.onEffectCanceled?.(event.effect);
         break;
       case "effect-failed":
-        handlers.onEffectFailed?.(event.effect as Immutable<Effect>, event.error);
+        handlers.onEffectFailed?.(event.effect, event.error);
         break;
     }
   };

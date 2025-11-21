@@ -31,6 +31,6 @@ export const handleActionRequestRefined = (
   return {
     ...state,
     actionParameters: newActionParameters,
-  } as Immutable<AgentState>;
+  };
 };
 

@@ -33,6 +33,6 @@ export const handleActionCancelledByUser = (
   return {
     ...state,
     actionResponses: newActionResponses,
-  } as Immutable<AgentState>;
+  };
 };
 

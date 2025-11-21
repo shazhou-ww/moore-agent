@@ -53,7 +53,7 @@ export const handleAssistantMessageComplete = (
     return {
       ...state,
       replies: newReplies,
-    } as Immutable<AgentState>;
+    };
   }
 
   // 成功追加，更新相关状态（不更新 lastReactionTimestamp）
@@ -61,6 +61,6 @@ export const handleAssistantMessageComplete = (
     ...state,
     historyMessages: newHistoryMessages,
     replies: newReplies,
-  } as Immutable<AgentState>;
+  };
 };
 

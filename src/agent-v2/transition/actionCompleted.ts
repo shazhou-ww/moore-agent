@@ -26,6 +26,6 @@ export const handleActionCompleted = (
   return {
     ...state,
     actionResponses: newActionResponses,
-  } as Immutable<AgentState>;
+  };
 };
 
