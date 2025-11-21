@@ -1,6 +1,6 @@
 import type { Immutable } from "mutative";
 import type { AgentState, HistoryMessage } from "../agentState.ts";
-import type { AgentEffect } from "../agentEffects.ts";
+import type { ReplyToUserEffect } from "../agentEffects.ts";
 import type {
   AgentSignal,
   AssistantChunkReceivedSignal,
@@ -18,7 +18,7 @@ import { now } from "../../utils/time.ts";
  * 创建 ReplyToUserEffect 的初始器
  */
 export const createReplyToUserEffectInitializer = (
-  effect: Immutable<Extract<AgentEffect, { kind: "reply-to-user" }>>,
+  effect: Immutable<ReplyToUserEffect>,
   state: Immutable<AgentState>,
   streamLLM: StreamLLMFn,
   sendUserMessageChunk: SendUserMessageChunkFn,

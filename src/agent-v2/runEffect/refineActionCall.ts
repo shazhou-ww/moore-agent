@@ -1,6 +1,6 @@
 import type { Immutable } from "mutative";
 import type { AgentState } from "../agentState.ts";
-import type { AgentEffect } from "../agentEffects.ts";
+import type { RefineActionCallEffect } from "../agentEffects.ts";
 import type { AgentSignal, ActionRequestRefinedSignal } from "../agentSignal.ts";
 import type {
   EffectInitializer,
@@ -13,7 +13,7 @@ import { now } from "../../utils/time.ts";
  * 创建 RefineActionCallEffect 的初始器
  */
 export const createRefineActionCallEffectInitializer = (
-  effect: Immutable<Extract<AgentEffect, { kind: "refine-action-call" }>>,
+  effect: Immutable<RefineActionCallEffect>,
   state: Immutable<AgentState>,
   invokeLLM: InvokeLLMFn,
   getActionParameterSchema: GetActionParameterSchemaFn,

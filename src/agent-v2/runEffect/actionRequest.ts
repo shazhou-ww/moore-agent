@@ -1,6 +1,6 @@
 import type { Immutable } from "mutative";
 import type { AgentState } from "../agentState.ts";
-import type { AgentEffect } from "../agentEffects.ts";
+import type { ActionRequestEffect } from "../agentEffects.ts";
 import type { AgentSignal, ActionCompletedSignal } from "../agentSignal.ts";
 import type { EffectInitializer, CallActionFn } from "./types.ts";
 import { now } from "../../utils/time.ts";
@@ -9,7 +9,7 @@ import { now } from "../../utils/time.ts";
  * 创建 ActionRequestEffect 的初始器
  */
 export const createActionRequestEffectInitializer = (
-  effect: Immutable<Extract<AgentEffect, { kind: "action-request" }>>,
+  effect: Immutable<ActionRequestEffect>,
   state: Immutable<AgentState>,
   callAction: CallActionFn,
 ): EffectInitializer => {

@@ -1,6 +1,6 @@
 import type { Immutable } from "mutative";
 import type { AgentState } from "../agentState.ts";
-import type { AgentEffect } from "../agentEffects.ts";
+import type { ReactionEffect } from "../agentEffects.ts";
 import type { AgentSignal, ReactionCompleteSignal } from "../agentSignal.ts";
 import type { EffectInitializer, InvokeLLMFn, GetSystemPromptsFn } from "./types.ts";
 import { parseJSONResponse } from "./types.ts";
@@ -10,7 +10,7 @@ import { now } from "../../utils/time.ts";
  * 创建 ReactionEffect 的初始器
  */
 export const createReactionEffectInitializer = (
-  effect: Immutable<Extract<AgentEffect, { kind: "reaction" }>>,
+  effect: Immutable<ReactionEffect>,
   state: Immutable<AgentState>,
   invokeLLM: InvokeLLMFn,
   getSystemPrompts: GetSystemPromptsFn,
