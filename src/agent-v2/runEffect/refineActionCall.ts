@@ -7,6 +7,8 @@ import type {
   InvokeLLMFn,
   GetActionParameterSchemaFn,
 } from "./types.ts";
+import type { Dispatch } from "./effectInitializer.ts";
+import { createEffectInitializer } from "./effectInitializer.ts";
 import { now } from "../../utils/time.ts";
 
 /**
@@ -17,14 +19,12 @@ export const createRefineActionCallEffectInitializer = (
   state: Immutable<AgentState>,
   invokeLLM: InvokeLLMFn,
   getActionParameterSchema: GetActionParameterSchemaFn,
-): EffectInitializer => {
-  let canceled = false;
-  // actionRequestId 从 effect 中获取
-  const actionRequestId = effect.actionRequestId;
-
-  return {
-    start: async (dispatch: (signal: Immutable<AgentSignal>) => void) => {
-      if (canceled) {
+): EffectInitializer =>
+  createEffectInitializer(
+    async (dispatch: Dispatch, isCancelled: () => boolean) => {
+      // actionRequestId 从 effect 中获取
+      const actionRequestId = effect.actionRequestId;
+      if (isCancelled()) {
         return;
       }
 
@@ -67,7 +67,7 @@ Please generate parameters that conform to the provided JSON Schema based on the
         // LLM 需要根据 intention、schema 和历史消息生成符合 schema 的 parameters
         const result = await invokeLLM("refine-action", enhancedSystemPrompts, messageWindow);
 
-        if (canceled) {
+        if (isCancelled()) {
           return;
         }
 
@@ -100,15 +100,11 @@ Please generate parameters that conform to the provided JSON Schema based on the
 
         dispatch(signal as Immutable<AgentSignal>);
       } catch (error) {
-        if (!canceled) {
+        if (!isCancelled()) {
           console.error("RefineActionCallEffect failed:", error);
           throw error;
         }
       }
     },
-    cancel: () => {
-      canceled = true;
-    },
-  };
-};
+  );
 

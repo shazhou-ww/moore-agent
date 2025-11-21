@@ -12,6 +12,8 @@ import type {
   SendUserMessageChunkFn,
   CompleteUserMessageFn,
 } from "./types.ts";
+import type { Dispatch } from "./effectInitializer.ts";
+import { createEffectInitializer } from "./effectInitializer.ts";
 import { now } from "../../utils/time.ts";
 
 /**
@@ -23,14 +25,12 @@ export const createReplyToUserEffectInitializer = (
   streamLLM: StreamLLMFn,
   sendUserMessageChunk: SendUserMessageChunkFn,
   completeUserMessage: CompleteUserMessageFn,
-): EffectInitializer => {
-  let canceled = false;
-  // messageId 从 effect 中获取
-  const messageId = effect.messageId;
-
-  return {
-    start: async (dispatch: (signal: Immutable<AgentSignal>) => void) => {
-      if (canceled) {
+): EffectInitializer =>
+  createEffectInitializer(
+    async (dispatch: Dispatch, isCancelled: () => boolean) => {
+      // messageId 从 effect 中获取
+      const messageId = effect.messageId;
+      if (isCancelled()) {
         return;
       }
 
@@ -70,7 +70,7 @@ export const createReplyToUserEffectInitializer = (
 
         // 发送 chunk 的函数，带合并逻辑
         const flushChunks = () => {
-          if (chunkQueue.length > 0 && !canceled) {
+          if (chunkQueue.length > 0 && !isCancelled()) {
             const mergedChunk = chunkQueue.join("");
             // 调用 sendUserMessageChunk 回调，传入 messageId
             sendUserMessageChunk(messageId, mergedChunk);
@@ -91,7 +91,7 @@ export const createReplyToUserEffectInitializer = (
 
         // 处理单个 chunk
         const handleChunk = (chunk: string) => {
-          if (canceled) {
+          if (isCancelled()) {
             return;
           }
           chunkQueue.push(chunk);
@@ -111,7 +111,7 @@ export const createReplyToUserEffectInitializer = (
           handleChunk,
         );
 
-        if (canceled) {
+        if (isCancelled()) {
           return;
         }
 
@@ -129,15 +129,11 @@ export const createReplyToUserEffectInitializer = (
         };
         dispatch(completeSignal as Immutable<AgentSignal>);
       } catch (error) {
-        if (!canceled) {
+        if (!isCancelled()) {
           console.error("ReplyToUserEffect failed:", error);
           throw error;
         }
       }
     },
-    cancel: () => {
-      canceled = true;
-    },
-  };
-};
+  );
 

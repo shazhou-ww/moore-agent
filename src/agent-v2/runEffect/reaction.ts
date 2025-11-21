@@ -3,6 +3,8 @@ import type { AgentState } from "../agentState.ts";
 import type { ReactionEffect } from "../agentEffects.ts";
 import type { AgentSignal, ReactionCompleteSignal } from "../agentSignal.ts";
 import type { EffectInitializer, InvokeLLMFn, GetSystemPromptsFn } from "./types.ts";
+import type { Dispatch } from "./effectInitializer.ts";
+import { createEffectInitializer } from "./effectInitializer.ts";
 import { parseJSONResponse } from "./types.ts";
 import { now } from "../../utils/time.ts";
 
@@ -14,14 +16,12 @@ export const createReactionEffectInitializer = (
   state: Immutable<AgentState>,
   invokeLLM: InvokeLLMFn,
   getSystemPrompts: GetSystemPromptsFn,
-): EffectInitializer => {
-  let canceled = false;
-  // 使用 timestamp 生成 reaction hash（用于 signal 中的 messageId）
-  const reactionHash = `reaction-${effect.timestamp}`;
-
-  return {
-    start: async (dispatch: (signal: Immutable<AgentSignal>) => void) => {
-      if (canceled) {
+): EffectInitializer =>
+  createEffectInitializer(
+    async (dispatch: Dispatch, isCancelled: () => boolean) => {
+      // 使用 timestamp 生成 reaction hash（用于 signal 中的 messageId）
+      const reactionHash = `reaction-${effect.timestamp}`;
+      if (isCancelled()) {
         return;
       }
 
@@ -39,7 +39,7 @@ export const createReactionEffectInitializer = (
         
         const result = await invokeLLM("reaction", systemPrompts, messageWindow);
 
-        if (canceled) {
+        if (isCancelled()) {
           return;
         }
 
@@ -59,15 +59,11 @@ export const createReactionEffectInitializer = (
 
         dispatch(signal as Immutable<AgentSignal>);
       } catch (error) {
-        if (!canceled) {
+        if (!isCancelled()) {
           console.error("ReactionEffect failed:", error);
           throw error;
         }
       }
     },
-    cancel: () => {
-      canceled = true;
-    },
-  };
-};
+  );
 

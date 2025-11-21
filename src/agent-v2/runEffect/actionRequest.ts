@@ -3,6 +3,8 @@ import type { AgentState } from "../agentState.ts";
 import type { ActionRequestEffect } from "../agentEffects.ts";
 import type { AgentSignal, ActionCompletedSignal } from "../agentSignal.ts";
 import type { EffectInitializer, CallActionFn } from "./types.ts";
+import type { Dispatch } from "./effectInitializer.ts";
+import { createEffectInitializer } from "./effectInitializer.ts";
 import { now } from "../../utils/time.ts";
 
 /**
@@ -12,14 +14,12 @@ export const createActionRequestEffectInitializer = (
   effect: Immutable<ActionRequestEffect>,
   state: Immutable<AgentState>,
   callAction: CallActionFn,
-): EffectInitializer => {
-  let canceled = false;
-  // actionRequestId 从 effect 中获取
-  const actionRequestId = effect.actionRequestId;
-
-  return {
-    start: async (dispatch: (signal: Immutable<AgentSignal>) => void) => {
-      if (canceled) {
+): EffectInitializer =>
+  createEffectInitializer(
+    async (dispatch: Dispatch, isCancelled: () => boolean) => {
+      // actionRequestId 从 effect 中获取
+      const actionRequestId = effect.actionRequestId;
+      if (isCancelled()) {
         return;
       }
 
@@ -42,7 +42,7 @@ export const createActionRequestEffectInitializer = (
         // 调用 action
         const result = await callAction(request.actionName, parameters);
 
-        if (canceled) {
+        if (isCancelled()) {
           return;
         }
 
@@ -55,15 +55,11 @@ export const createActionRequestEffectInitializer = (
 
         dispatch(signal as Immutable<AgentSignal>);
       } catch (error) {
-        if (!canceled) {
+        if (!isCancelled()) {
           console.error("ActionRequestEffect failed:", error);
           throw error;
         }
       }
     },
-    cancel: () => {
-      canceled = true;
-    },
-  };
-};
+  );
 
