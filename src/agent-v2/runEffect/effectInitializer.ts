@@ -19,7 +19,13 @@ export const createEffectInitializer = (
 
   return {
     start: async (dispatch: Dispatch) => {
-      await start(dispatch, () => canceled);
+      try {
+        await start(dispatch, () => canceled);
+      } catch (error) {
+        if (!canceled) {
+          console.warn("Effect failed:", error);
+        }
+      }
     },
     cancel: () => {
       canceled = true;
