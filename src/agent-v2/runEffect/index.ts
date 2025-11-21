@@ -20,7 +20,7 @@ export const createRunEffect = (options: RunEffectOptions) => {
 
   const runEffect = (effect: AgentEffect): EffectInitializer => {
     if (effect.kind === "reaction") {
-      return createReactionEffectInitializer(effect, invokeLLM);
+      return createReactionEffectInitializer(effect, invokeLLM, getSystemPrompts);
     }
 
     if (effect.kind === "refine-action-call") {

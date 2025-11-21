@@ -54,6 +54,12 @@ export type SendUserMessageChunkFn = (chunk: string) => void;
 export type CompleteUserMessageFn = () => void;
 
 /**
+ * 获取 System Prompts 函数类型
+ * 用于从 state 或其他地方获取 system prompts
+ */
+export type GetSystemPromptsFn = () => string;
+
+/**
  * RunEffect 选项
  */
 export type RunEffectOptions = {
@@ -61,6 +67,7 @@ export type RunEffectOptions = {
   streamLLM: StreamLLMFn;
   callAction: CallActionFn;
   getActionParameters: GetActionParametersFn; // 用于获取 action parameters
+  getSystemPrompts: GetSystemPromptsFn; // 用于获取 system prompts
   sendUserMessageChunk: SendUserMessageChunkFn;
   completeUserMessage: CompleteUserMessageFn;
 };

@@ -9,9 +9,8 @@ import type { ActionDefinition, HistoryMessage, ActionRequest } from "./agentSta
  * - 判断是否需要直接对用户回复
  * 
  * 输入：
- * - 触发源：可能是用户消息或 action responses
- * - 当前进行中的 action requests 上下文
- * - 历史消息窗口
+ * - 上次 ReactionEffect 之后更新的 user messages 和 action responses
+ * - 所有 action requests 的状态信息
  * 
  * 输出：
  * - 结构化决策结果（取消哪些 action、新开哪些 action、或者直接回复）
@@ -19,22 +18,26 @@ import type { ActionDefinition, HistoryMessage, ActionRequest } from "./agentSta
  * 注意：Reaction 是 non-streaming 的，直接返回决策结果
  */
 export type ReactionEffect = {
-  key: string; // 用于 moorex 的 HasKey 约束，例如 "reaction-{messageId}"
+  key: string; // 用于 moorex 的 HasKey 约束，由 timestamp 和最新的 ids hash 计算得来
   kind: "reaction";
-  systemPrompts: string;
-  messageWindow: HistoryMessage[]; // 包含相关的历史上下文
-  // 触发源：可能是用户消息或 action responses
-  trigger: {
-    type: "user-message" | "action-responses";
-    userMessageId?: string; // 如果是用户消息触发
-    actionResponseIds?: string[]; // 如果是 action responses 触发
-  };
-  // 当前进行中的 action requests 信息，用于判断影响
-  ongoingActionRequests: Array<{
+  // 上次 ReactionEffect 之后更新的 user messages
+  newUserMessages: HistoryMessage[];
+  // 上次 ReactionEffect 之后更新的 action responses
+  newActionResponses: Array<{
+    actionRequestId: string;
+    type: "completed" | "cancelled";
+    result?: string; // 仅当 type 为 'completed' 时存在
+    timestamp: number;
+  }>;
+  // 所有 action requests 的状态信息
+  actionRequests: Array<{
     actionRequestId: string;
     actionName: string;
     intention: string;
+    status: "ongoing" | "completed" | "cancelled";
   }>;
+  // 此次 reaction 的 timestamp，应该是 max(last user message timestamp, last action response timestamp)
+  timestamp: number;
 };
 
 /**
