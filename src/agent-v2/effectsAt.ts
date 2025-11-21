@@ -1,0 +1,154 @@
+import type { Immutable } from "mutative";
+import type { AgentState } from "./agentState.ts";
+import type {
+  AgentEffect,
+  ReactionEffect,
+  ReplyToUserEffect,
+  RefineActionCallEffect,
+  ActionRequestEffect,
+} from "./agentEffects.ts";
+
+/**
+ * 提取 ReactionEffect
+ *
+ * 触发条件：当且仅当存在比上一次 reaction 更新的 ActionResponse 或 UserMessage
+ * （timestamp > lastReactionTimestamp）
+ *
+ * 注意：ReplyToUserEffect 可以有多条并行，不影响 Reaction 决策
+ */
+const extractReactionEffect = ({
+  historyMessages,
+  actionResponses,
+  lastReactionTimestamp,
+}: Immutable<AgentState>): ReactionEffect | null => {
+  // 计算此次 reaction 的 timestamp：max(last user message timestamp, last action response timestamp)
+  const timestamp = Math.max(
+    ...historyMessages
+      // 只取用户消息且时间戳大于上次 reaction 时间
+      .filter(({ type, timestamp }) => type === "user" && timestamp > lastReactionTimestamp)
+      .map(({ timestamp }) => timestamp),
+    ...Object.entries(actionResponses)
+      // 只取时间戳大于上次 reaction 时间的 action response
+      .filter(([_, { timestamp }]) => timestamp > lastReactionTimestamp)
+      .map(([_, { timestamp }]) => timestamp)
+  );
+
+  // 如果计算出的 timestamp 不大于 lastReactionTimestamp，说明没有新的输入，不需要 Reaction
+  return timestamp > lastReactionTimestamp
+    ? { kind: "reaction", timestamp }
+    : null;
+};
+
+/**
+ * 提取所有 ReplyToUserEffect
+ *
+ * 如果 replies 中有 context，说明 reaction 已经决定要回复用户，需要生成 streaming 回复
+ * 所有 replies 中的 context 都需要生成回复（可以并发）
+ *
+ * Effect 只包含 messageId，其他数据在 runEffect 时从 state.replies[messageId] 和 state 中获取
+ */
+const extractReplyToUserEffects = ({
+  replies,
+}: Immutable<AgentState>): ReplyToUserEffect[] =>
+  Object.keys(replies).map(
+    (messageId): ReplyToUserEffect => ({
+      kind: "reply-to-user",
+      messageId, // messageId 对应 state.replies 的 key
+    })
+  );
+
+/**
+ * 提取所有 RefineActionCallEffect
+ *
+ * 所有没有 parameters 的 action requests 都需要细化（可以并发）
+ *
+ * Effect 只包含 actionRequestId，其他数据在 runEffect 时从 state 中获取
+ */
+const extractRefineActionCallEffects = (
+  state: Immutable<AgentState>
+): RefineActionCallEffect[] =>
+  Object.entries(state.actionRequests)
+    .filter(
+      ([actionRequestId, request]) =>
+        !(actionRequestId in state.actionResponses) && // 如果已经有 response，跳过
+        !(actionRequestId in state.actionParameters) && // 如果没有 parameters，需要细化
+        state.actions[request.actionName] // 如果 action 定义不存在，跳过
+    )
+    .map(
+      ([actionRequestId]): RefineActionCallEffect => ({
+        kind: "refine-action-call",
+        actionRequestId,
+      })
+    );
+
+/**
+ * 提取所有 ActionRequestEffect
+ *
+ * 所有有 parameters 但没有 response 的 action requests 都需要执行（可以并发）
+ *
+ * Effect 只包含 actionRequestId，其他数据在 runEffect 时从 state 中获取
+ */
+const extractActionRequestEffects = ({
+  actionRequests,
+  actionResponses,
+  actionParameters,
+}: Immutable<AgentState>): ActionRequestEffect[] =>
+  Object.keys(actionRequests)
+    .filter(
+      (actionRequestId) =>
+        !(actionRequestId in actionResponses) && // 如果已经有 response，跳过
+        actionRequestId in actionParameters // 如果有 parameters，需要执行
+    )
+    .map(
+      (actionRequestId): ActionRequestEffect => ({
+        kind: "action-request",
+        actionRequestId,
+      })
+    );
+
+/**
+ * 为 effect 生成唯一的 key（用于 Record）
+ */
+const getEffectKey = (effect: AgentEffect): string => {
+  switch (effect.kind) {
+    case "reaction":
+      return `reaction-${effect.timestamp}`;
+    case "reply-to-user":
+      return `reply-${effect.messageId}`;
+    case "refine-action-call":
+      return `refine-action-${effect.actionRequestId}`;
+    case "action-request":
+      return `action-request-${effect.actionRequestId}`;
+    default:
+      const _exhaustive: never = effect;
+      throw new Error(`Unknown effect kind: ${(_exhaustive as AgentEffect).kind}`);
+  }
+};
+
+/**
+ * 根据状态推导需要执行的 effects
+ *
+ * 所有 effects 都可以并发执行，函数会返回当前状态下所有需要执行的 effects：
+ *
+ * 1. ReplyToUserEffect - 所有 replies 中的 context 都需要生成回复（可以并发）
+ * 2. ReactionEffect - 如果有新的用户消息或新的 action responses，且没有待处理的 ReplyToUserEffect，需要做反应
+ * 3. RefineActionCallEffect - 所有没有 parameters 的 action requests 都需要细化（可以并发）
+ * 4. ActionRequestEffect - 所有有 parameters 但没有 response 的 action requests 都需要执行（可以并发）
+ */
+export const effectsAt = (state: Immutable<AgentState>): Record<string, Immutable<AgentEffect>> => {
+  const reactionEffect = extractReactionEffect(state);
+  const effects: AgentEffect[] = [
+    ...extractReplyToUserEffects(state),
+    ...(reactionEffect ? [reactionEffect] : []),
+    ...extractRefineActionCallEffects(state),
+    ...extractActionRequestEffects(state),
+  ];
+
+  // 转换为 Record<string, Immutable<AgentEffect>>
+  const result: Record<string, Immutable<AgentEffect>> = {};
+  for (const effect of effects) {
+    result[getEffectKey(effect)] = effect as Immutable<AgentEffect>;
+  }
+  return result;
+};
+
