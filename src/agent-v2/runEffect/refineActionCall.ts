@@ -2,7 +2,11 @@ import type { Immutable } from "mutative";
 import type { AgentState } from "../agentState.ts";
 import type { AgentEffect } from "../agentEffects.ts";
 import type { AgentSignal, ActionRequestRefinedSignal } from "../agentSignal.ts";
-import type { EffectInitializer, InvokeLLMFn } from "./types.ts";
+import type {
+  EffectInitializer,
+  InvokeLLMFn,
+  GetActionParameterSchemaFn,
+} from "./types.ts";
 import { now } from "../../utils/time.ts";
 
 /**
@@ -12,6 +16,7 @@ export const createRefineActionCallEffectInitializer = (
   effect: Immutable<Extract<AgentEffect, { kind: "refine-action-call" }>>,
   state: Immutable<AgentState>,
   invokeLLM: InvokeLLMFn,
+  getActionParameterSchema: GetActionParameterSchemaFn,
 ): EffectInitializer => {
   let canceled = false;
   // actionRequestId 从 effect 中获取
@@ -30,19 +35,37 @@ export const createRefineActionCallEffectInitializer = (
           throw new Error(`Action request not found for actionRequestId: ${actionRequestId}`);
         }
 
-        // 从 state 获取 action 定义
-        const actionDefinition = state.actions[request.actionName];
-        if (!actionDefinition) {
-          throw new Error(`Action definition not found for actionName: ${request.actionName}`);
+        // 获取 action 的 parameter schema
+        const parameterSchema = getActionParameterSchema(request.actionName);
+        if (!parameterSchema) {
+          throw new Error(
+            `Action parameter schema not found for actionName: ${request.actionName}`,
+          );
         }
 
         // 从 state 获取 systemPrompts
-        const systemPrompts = state.systemPrompts;
+        const baseSystemPrompts = state.systemPrompts;
+
+        // 构建包含 action 信息的 system prompts
+        // 将 parameter schema 和 intention 添加到 system prompts 中，以便 LLM 生成符合 schema 的 parameters
+        const enhancedSystemPrompts = `${baseSystemPrompts}
+
+## Action Parameter Refinement Task
+You need to generate parameters for the following action:
+
+**Action Name:** ${request.actionName}
+**Intention:** ${request.intention}
+**Parameter Schema (JSON Schema):**
+${parameterSchema}
+
+Please generate parameters that conform to the provided JSON Schema based on the intention and conversation history. Return the parameters as a valid JSON object that matches the schema.`;
 
         // 从 state 获取历史消息窗口
         const messageWindow = Array.from(state.historyMessages);
 
-        const result = await invokeLLM(systemPrompts, messageWindow);
+        // 使用 'refine-action' scene 调用 LLM，传入 intention、parameter schema 和历史消息
+        // LLM 需要根据 intention、schema 和历史消息生成符合 schema 的 parameters
+        const result = await invokeLLM("refine-action", enhancedSystemPrompts, messageWindow);
 
         if (canceled) {
           return;

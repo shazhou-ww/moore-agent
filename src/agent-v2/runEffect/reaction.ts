@@ -37,7 +37,7 @@ export const createReactionEffectInitializer = (
         // 使用 newUserMessages 作为 messageWindow（新的用户输入）
         const messageWindow = Array.from(newUserMessages);
         
-        const result = await invokeLLM(systemPrompts, messageWindow);
+        const result = await invokeLLM("reaction", systemPrompts, messageWindow);
 
         if (canceled) {
           return;

@@ -11,10 +11,16 @@ export type EffectInitializer = {
 };
 
 /**
+ * LLM 调用场景类型
+ */
+export type LLMScene = "reaction" | "refine-action" | "reply-to-user";
+
+/**
  * 非流式调用大模型函数类型
  * 返回结构化的决策结果（根据不同的 Effect 类型，返回不同的结果）
  */
 export type InvokeLLMFn = (
+  scene: LLMScene,
   systemPrompts: string,
   messageWindow: HistoryMessage[],
 ) => Promise<string>; // 返回 JSON 字符串
@@ -23,6 +29,7 @@ export type InvokeLLMFn = (
  * 流式调用大模型函数类型
  */
 export type StreamLLMFn = (
+  scene: LLMScene,
   systemPrompts: string,
   messageWindow: HistoryMessage[],
   onChunk: (chunk: string) => void,
@@ -37,22 +44,22 @@ export type CallActionFn = (
 ) => Promise<string>; // 返回结果字符串
 
 /**
- * 获取 Action Parameters 函数类型
- * 用于从 state 中获取对应 actionRequestId 的 parameters
+ * 获取 Action Parameter Schema 函数类型
+ * 用于从 state 中获取对应 actionName 的 parameter schema（JSON Schema 字符串）
  */
-export type GetActionParametersFn = (
-  actionRequestId: string,
-) => string | undefined; // 返回 JSON 字符串或 undefined
+export type GetActionParameterSchemaFn = (
+  actionName: string,
+) => string | undefined; // 返回 JSON Schema 字符串或 undefined
 
 /**
  * 发送用户消息块函数类型
  */
-export type SendUserMessageChunkFn = (chunk: string) => void;
+export type SendUserMessageChunkFn = (messageId: string, chunk: string) => void;
 
 /**
  * 完成用户消息函数类型
  */
-export type CompleteUserMessageFn = () => void;
+export type CompleteUserMessageFn = (messageId: string) => void;
 
 /**
  * 获取 System Prompts 函数类型
@@ -67,7 +74,7 @@ export type RunEffectOptions = {
   invokeLLM: InvokeLLMFn;
   streamLLM: StreamLLMFn;
   callAction: CallActionFn;
-  getActionParameters: GetActionParametersFn; // 用于获取 action parameters
+  getActionParameterSchema: GetActionParameterSchemaFn; // 用于获取 action parameter schema
   getSystemPrompts: GetSystemPromptsFn; // 用于获取 system prompts
   sendUserMessageChunk: SendUserMessageChunkFn;
   completeUserMessage: CompleteUserMessageFn;

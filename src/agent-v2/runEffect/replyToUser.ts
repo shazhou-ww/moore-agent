@@ -72,8 +72,8 @@ export const createReplyToUserEffectInitializer = (
         const flushChunks = () => {
           if (chunkQueue.length > 0 && !canceled) {
             const mergedChunk = chunkQueue.join("");
-            // 调用 sendUserMessageChunk 回调
-            sendUserMessageChunk(mergedChunk);
+            // 调用 sendUserMessageChunk 回调，传入 messageId
+            sendUserMessageChunk(messageId, mergedChunk);
 
             // dispatch assistant-chunk-received 信号
             const chunkSignal: AssistantChunkReceivedSignal = {
@@ -103,8 +103,13 @@ export const createReplyToUserEffectInitializer = (
           }
         };
 
-        // 调用流式 LLM
-        await streamLLM(systemPrompts, Array.from(relatedHistoryMessages), handleChunk);
+        // 调用流式 LLM，使用 'reply-to-user' scene
+        await streamLLM(
+          "reply-to-user",
+          systemPrompts,
+          Array.from(relatedHistoryMessages),
+          handleChunk,
+        );
 
         if (canceled) {
           return;
@@ -113,8 +118,8 @@ export const createReplyToUserEffectInitializer = (
         // 先 flush 剩余的 chunks
         flushChunks();
 
-        // 调用 completeUserMessage 回调
-        completeUserMessage();
+        // 调用 completeUserMessage 回调，传入 messageId
+        completeUserMessage(messageId);
 
         // dispatch assistant-message-complete 信号
         const completeSignal: AssistantMessageCompleteSignal = {

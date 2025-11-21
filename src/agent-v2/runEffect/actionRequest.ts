@@ -2,11 +2,7 @@ import type { Immutable } from "mutative";
 import type { AgentState } from "../agentState.ts";
 import type { AgentEffect } from "../agentEffects.ts";
 import type { AgentSignal, ActionCompletedSignal } from "../agentSignal.ts";
-import type {
-  EffectInitializer,
-  CallActionFn,
-  GetActionParametersFn,
-} from "./types.ts";
+import type { EffectInitializer, CallActionFn } from "./types.ts";
 import { now } from "../../utils/time.ts";
 
 /**
@@ -16,7 +12,6 @@ export const createActionRequestEffectInitializer = (
   effect: Immutable<Extract<AgentEffect, { kind: "action-request" }>>,
   state: Immutable<AgentState>,
   callAction: CallActionFn,
-  getActionParameters: GetActionParametersFn,
 ): EffectInitializer => {
   let canceled = false;
   // actionRequestId 从 effect 中获取
@@ -35,8 +30,8 @@ export const createActionRequestEffectInitializer = (
           throw new Error(`Action request not found for actionRequestId: ${actionRequestId}`);
         }
 
-        // 从 state 中获取对应的 parameters
-        const parameters = getActionParameters(actionRequestId);
+        // 从 state.actionParameters 中获取对应的 parameters
+        const parameters = state.actionParameters[actionRequestId];
 
         if (!parameters) {
           throw new Error(

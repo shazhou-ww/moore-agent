@@ -15,7 +15,7 @@ export const createRunEffect = (options: RunEffectOptions) => {
     invokeLLM,
     streamLLM,
     callAction,
-    getActionParameters,
+    getActionParameterSchema,
     getSystemPrompts,
     sendUserMessageChunk,
     completeUserMessage,
@@ -30,7 +30,12 @@ export const createRunEffect = (options: RunEffectOptions) => {
     }
 
     if (effect.kind === "refine-action-call") {
-      return createRefineActionCallEffectInitializer(effect as Immutable<import("../agentEffects.ts").RefineActionCallEffect>, state, invokeLLM);
+      return createRefineActionCallEffectInitializer(
+        effect as Immutable<import("../agentEffects.ts").RefineActionCallEffect>,
+        state,
+        invokeLLM,
+        getActionParameterSchema,
+      );
     }
 
     if (effect.kind === "reply-to-user") {
@@ -44,7 +49,11 @@ export const createRunEffect = (options: RunEffectOptions) => {
     }
 
     if (effect.kind === "action-request") {
-      return createActionRequestEffectInitializer(effect as Immutable<import("../agentEffects.ts").ActionRequestEffect>, state, callAction, getActionParameters);
+      return createActionRequestEffectInitializer(
+        effect as Immutable<import("../agentEffects.ts").ActionRequestEffect>,
+        state,
+        callAction,
+      );
     }
 
     // Exhaustiveness check
