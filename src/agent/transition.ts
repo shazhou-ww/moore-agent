@@ -1,4 +1,4 @@
-import type { FrozenJson } from "@hstore/core";
+import type { Immutable } from "mutative";
 import type {
   AgentState,
   Signal,
@@ -69,10 +69,10 @@ const isValidTimestamp = (
 /**
  * 处理 assistant-chunk 信号
  */
-const handleAssistantChunk = <T extends AgentState | FrozenJson<AgentState>>(
-  signal: AssistantChunkSignal,
-  state: T,
-): T => {
+const handleAssistantChunk = (
+  signal: Immutable<AssistantChunkSignal>,
+  state: Immutable<AgentState>,
+): Immutable<AgentState> => {
   // 如果已有 partialMessage 且 messageId 匹配，追加 chunk
   if (state.partialMessage && state.partialMessage.messageId === signal.messageId) {
     return {
@@ -81,7 +81,7 @@ const handleAssistantChunk = <T extends AgentState | FrozenJson<AgentState>>(
         messageId: state.partialMessage.messageId,
         chunks: [...Array.from(state.partialMessage.chunks), signal.chunk],
       },
-    } as T;
+    } as Immutable<AgentState>;
   }
 
   // 如果没有 partialMessage 或 messageId 不匹配，创建新的
@@ -91,16 +91,16 @@ const handleAssistantChunk = <T extends AgentState | FrozenJson<AgentState>>(
       messageId: signal.messageId,
       chunks: [signal.chunk],
     },
-  } as T;
+  } as Immutable<AgentState>;
 };
 
 /**
  * 处理 assistant-complete 信号
  */
-const handleAssistantComplete = <T extends AgentState | FrozenJson<AgentState>>(
-  signal: AssistantMessageCompleteSignal,
-  state: T,
-): T => {
+const handleAssistantComplete = (
+  signal: Immutable<AssistantMessageCompleteSignal>,
+  state: Immutable<AgentState>,
+): Immutable<AgentState> => {
   if (!state.partialMessage || state.partialMessage.messageId !== signal.messageId) {
     throw new Error(`Partial message not found for messageId: ${signal.messageId}`);
   }
@@ -111,7 +111,7 @@ const handleAssistantComplete = <T extends AgentState | FrozenJson<AgentState>>(
     id: signal.messageId,
     kind: "assistant",
     content,
-    toolCalls: signal.toolCalls,
+    toolCalls: Array.from(signal.toolCalls),
     timestamp: signal.timestamp,
   };
 
@@ -129,17 +129,16 @@ const handleAssistantComplete = <T extends AgentState | FrozenJson<AgentState>>(
     messages: newMessages,
     partialMessage: newPartialMessage,
     lastSentToLLMAt: newLastSentToLLMAt,
-  } as T;
+  } as Immutable<AgentState>;
 };
 
 /**
  * 状态转换函数（通用版本）
  * 将信号应用到状态，返回新状态
- * 支持 AgentState 和 FrozenJson<AgentState> 类型
  */
-export const transition = <T extends AgentState | FrozenJson<AgentState>>(
-  signal: Signal,
-) => (state: T): T => {
+export const transition = (
+  signal: Immutable<Signal>,
+) => (state: Immutable<AgentState>): Immutable<AgentState> => {
   // 验证 timestamp
   if (!isValidTimestamp(signal.timestamp, state.lastSentToLLMAt)) {
     throw new Error(
@@ -149,20 +148,20 @@ export const transition = <T extends AgentState | FrozenJson<AgentState>>(
 
   // 处理不同类型的信号
   if (signal.kind === "assistant-chunk") {
-    return handleAssistantChunk(signal, state);
+    return handleAssistantChunk(signal, state) as Immutable<AgentState>;
   }
 
   if (signal.kind === "assistant-complete") {
-    return handleAssistantComplete(signal, state);
+    return handleAssistantComplete(signal, state) as Immutable<AgentState>;
   }
 
   // 处理 user 和 tool 消息
   if (signal.kind === "user" || signal.kind === "tool") {
-    const newMessages = insertMessage(state.messages as ReadonlyArray<UserMessage | ToolMessage | AssistantMessage>, signal);
+    const newMessages = insertMessage(state.messages as ReadonlyArray<UserMessage | ToolMessage | AssistantMessage>, signal as UserMessage | ToolMessage);
     return {
       ...state,
       messages: newMessages,
-    } as T;
+    } as Immutable<AgentState>;
   }
   
   // 未知信号类型

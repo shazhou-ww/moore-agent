@@ -1,4 +1,4 @@
-import type { FrozenJson } from "@hstore/core";
+import type { Immutable } from "mutative";
 import type { AgentState } from "../agentState.ts";
 import type { RefineActionCallEffect } from "../agentEffects.ts";
 
@@ -8,7 +8,7 @@ import type { RefineActionCallEffect } from "../agentEffects.ts";
  * 所有没有 parameters 的 action requests 都需要细化（可以并发）
  */
 export const extractRefineActionCallEffects = (
-  state: FrozenJson<AgentState>,
+  state: Immutable<AgentState>,
 ): RefineActionCallEffect[] => {
   const effects: RefineActionCallEffect[] = [];
 
@@ -58,15 +58,15 @@ export const extractRefineActionCallEffects = (
         key: `refine-action-${actionRequestId}`,
         kind: "refine-action-call",
         systemPrompts: state.systemPrompts,
-        messageWindow: [...state.historyMessages],
+        messageWindow: Array.from(state.historyMessages),
         targetAction: {
           name: request.actionName,
           ...actionDefinition,
         },
         initialIntent: request.intention,
         context: {
-          recentActionResponses: recentActionResponses.length > 0 ? recentActionResponses : undefined,
-          relatedOngoingActions: relatedOngoingActions.length > 0 ? relatedOngoingActions : undefined,
+          recentActionResponses: recentActionResponses.length > 0 ? Array.from(recentActionResponses) : undefined,
+          relatedOngoingActions: relatedOngoingActions.length > 0 ? Array.from(relatedOngoingActions) : undefined,
         },
       };
 

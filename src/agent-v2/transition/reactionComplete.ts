@@ -1,4 +1,4 @@
-import type { FrozenJson } from "@hstore/core";
+import type { Immutable } from "mutative";
 import type { AgentState, ReplyToUserContext } from "../agentState.ts";
 import type { ReactionCompleteSignal, ReplyToUserDecision, AdjustActionsDecision } from "../agentSignal.ts";
 import { computeReplyKey } from "./utils.ts";
@@ -6,11 +6,11 @@ import { computeReplyKey } from "./utils.ts";
 /**
  * 处理 reply-to-user 决策
  */
-const handleReplyToUserDecision = <T extends AgentState | FrozenJson<AgentState>>(
-  decision: ReplyToUserDecision,
+const handleReplyToUserDecision = (
+  decision: Immutable<ReplyToUserDecision>,
   timestamp: number,
-  state: T,
-): T => {
+  state: Immutable<AgentState>,
+): Immutable<AgentState> => {
   const { lastHistoryMessageId, relatedActionIds } = decision;
   
   // 先对 Action Ids 进行排序，确保 hash 计算的一致性
@@ -38,17 +38,17 @@ const handleReplyToUserDecision = <T extends AgentState | FrozenJson<AgentState>
     ...state,
     replies: newReplies,
     lastReactionTimestamp: timestamp,
-  } as T;
+  } as Immutable<AgentState>;
 };
 
 /**
  * 处理 adjust-actions 决策
  */
-const handleAdjustActionsDecision = <T extends AgentState | FrozenJson<AgentState>>(
-  decision: AdjustActionsDecision,
+const handleAdjustActionsDecision = (
+  decision: Immutable<AdjustActionsDecision>,
   timestamp: number,
-  state: T,
-): T => {
+  state: Immutable<AgentState>,
+): Immutable<AgentState> => {
   const { cancelActions, newActions } = decision;
   
   // 创建 mutable 的副本
@@ -90,7 +90,7 @@ const handleAdjustActionsDecision = <T extends AgentState | FrozenJson<AgentStat
     actionRequests: newActionRequests,
     actionResponses: newActionResponses,
     lastReactionTimestamp: timestamp,
-  } as T;
+  } as Immutable<AgentState>;
 };
 
 /**
@@ -106,15 +106,15 @@ const handleAdjustActionsDecision = <T extends AgentState | FrozenJson<AgentStat
 /**
  * 处理 noop 决策
  */
-const handleNoopDecision = <T extends AgentState | FrozenJson<AgentState>>(
+const handleNoopDecision = (
   timestamp: number,
-  state: T,
-): T => {
+  state: Immutable<AgentState>,
+): Immutable<AgentState> => {
   // noop：什么都不需要调整，只更新 lastReactionTimestamp
   return {
     ...state,
     lastReactionTimestamp: timestamp,
-  } as T;
+  } as Immutable<AgentState>;
 };
 
 /**
@@ -128,10 +128,10 @@ const handleNoopDecision = <T extends AgentState | FrozenJson<AgentState>>(
  *   - 如果是 noop：什么都不需要调整，只更新 lastReactionTimestamp
  * - 更新 lastReactionTimestamp 为 signal.timestamp
  */
-export const handleReactionComplete = <T extends AgentState | FrozenJson<AgentState>>(
-  signal: ReactionCompleteSignal,
-  state: T,
-): T => {
+export const handleReactionComplete = (
+  signal: Immutable<ReactionCompleteSignal>,
+  state: Immutable<AgentState>,
+): Immutable<AgentState> => {
   // Reaction 是 non-streaming 的，直接处理决策结果
   if (signal.decision.type === "reply-to-user") {
     return handleReplyToUserDecision(signal.decision, signal.timestamp, state);
@@ -145,6 +145,6 @@ export const handleReactionComplete = <T extends AgentState | FrozenJson<AgentSt
   return {
     ...state,
     lastReactionTimestamp: signal.timestamp,
-  } as T;
+  } as Immutable<AgentState>;
 };
 

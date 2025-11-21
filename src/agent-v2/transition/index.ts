@@ -1,4 +1,4 @@
-import type { FrozenJson } from "@hstore/core";
+import type { Immutable } from "mutative";
 import type { AgentState } from "../agentState.ts";
 import type { AgentSignal } from "../agentSignal.ts";
 import { handleUserMessageReceived } from "./userMessageReceived.ts";
@@ -12,13 +12,12 @@ import { handleReactionComplete } from "./reactionComplete.ts";
 /**
  * 状态转换函数（通用版本）
  * 将信号应用到状态，返回新状态
- * 支持 AgentState 和 FrozenJson<AgentState> 类型
  * 
  * 符合 moorex 的 transition signature: (signal) => (state) => state
  */
-export const transition = <T extends AgentState | FrozenJson<AgentState>>(
-  signal: AgentSignal,
-) => (state: T): T => {
+export const transition = (
+  signal: Immutable<AgentSignal>,
+) => (state: Immutable<AgentState>): Immutable<AgentState> => {
   // 验证 timestamp（对于需要验证的信号）
   if (
     signal.kind === "user-message-received" ||
@@ -36,25 +35,25 @@ export const transition = <T extends AgentState | FrozenJson<AgentState>>(
   // 处理不同类型的信号
   switch (signal.kind) {
     case "user-message-received":
-      return handleUserMessageReceived(signal, state);
+      return handleUserMessageReceived(signal, state) as Immutable<AgentState>;
 
     case "action-completed":
-      return handleActionCompleted(signal, state);
+      return handleActionCompleted(signal, state) as Immutable<AgentState>;
 
     case "action-request-refined":
-      return handleActionRequestRefined(signal, state);
+      return handleActionRequestRefined(signal, state) as Immutable<AgentState>;
 
     case "action-cancelled-by-user":
-      return handleActionCancelledByUser(signal, state);
+      return handleActionCancelledByUser(signal, state) as Immutable<AgentState>;
 
     case "assistant-chunk-received":
-      return handleAssistantChunkReceived(signal, state);
+      return handleAssistantChunkReceived(signal, state) as Immutable<AgentState>;
 
     case "assistant-message-complete":
-      return handleAssistantMessageComplete(signal, state);
+      return handleAssistantMessageComplete(signal, state) as Immutable<AgentState>;
 
     case "reaction-complete":
-      return handleReactionComplete(signal, state);
+      return handleReactionComplete(signal, state) as Immutable<AgentState>;
 
     default:
       // 类型守卫：确保所有信号类型都被处理

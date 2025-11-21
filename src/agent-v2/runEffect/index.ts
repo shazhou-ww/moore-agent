@@ -1,3 +1,5 @@
+import type { Immutable } from "mutative";
+import type { AgentState } from "../agentState.ts";
 import type { AgentEffect } from "../agentEffects.ts";
 import { createReactionEffectInitializer } from "./reaction.ts";
 import { createRefineActionCallEffectInitializer } from "./refineActionCall.ts";
@@ -14,22 +16,26 @@ export const createRunEffect = (options: RunEffectOptions) => {
     streamLLM,
     callAction,
     getActionParameters,
+    getSystemPrompts,
     sendUserMessageChunk,
     completeUserMessage,
   } = options;
 
-  const runEffect = (effect: AgentEffect): EffectInitializer => {
+  const runEffect = (
+    effect: Immutable<AgentEffect>,
+    state: Immutable<AgentState>,
+  ): EffectInitializer => {
     if (effect.kind === "reaction") {
-      return createReactionEffectInitializer(effect, invokeLLM, getSystemPrompts);
+      return createReactionEffectInitializer(effect as Immutable<import("../agentEffects.ts").ReactionEffect>, invokeLLM, getSystemPrompts);
     }
 
     if (effect.kind === "refine-action-call") {
-      return createRefineActionCallEffectInitializer(effect, invokeLLM);
+      return createRefineActionCallEffectInitializer(effect as Immutable<import("../agentEffects.ts").RefineActionCallEffect>, invokeLLM);
     }
 
     if (effect.kind === "reply-to-user") {
       return createReplyToUserEffectInitializer(
-        effect,
+        effect as Immutable<import("../agentEffects.ts").ReplyToUserEffect>,
         streamLLM,
         sendUserMessageChunk,
         completeUserMessage,
@@ -37,7 +43,7 @@ export const createRunEffect = (options: RunEffectOptions) => {
     }
 
     if (effect.kind === "action-request") {
-      return createActionRequestEffectInitializer(effect, callAction, getActionParameters);
+      return createActionRequestEffectInitializer(effect as Immutable<import("../agentEffects.ts").ActionRequestEffect>, callAction, getActionParameters);
     }
 
     // Exhaustiveness check

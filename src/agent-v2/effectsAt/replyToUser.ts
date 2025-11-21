@@ -1,4 +1,4 @@
-import type { FrozenJson } from "@hstore/core";
+import type { Immutable } from "mutative";
 import type { AgentState, HistoryMessage } from "../agentState.ts";
 import type { ReplyToUserEffect } from "../agentEffects.ts";
 
@@ -9,7 +9,7 @@ import type { ReplyToUserEffect } from "../agentEffects.ts";
  * 所有 replies 中的 context 都需要生成回复（可以并发）
  */
 export const extractReplyToUserEffects = (
-  state: FrozenJson<AgentState>,
+  state: Immutable<AgentState>,
 ): ReplyToUserEffect[] => {
   const effects: ReplyToUserEffect[] = [];
 
@@ -65,11 +65,11 @@ export const extractReplyToUserEffects = (
       key: messageId, // messageId 就是 hash(lastHistoryMessageId + sorted actionIds)
       kind: "reply-to-user",
       systemPrompts: state.systemPrompts,
-      relatedHistoryMessages,
+      relatedHistoryMessages: Array.from(relatedHistoryMessages),
       lastHistoryMessageId: replyContext.lastHistoryMessageId,
-      relatedActionIds: [...replyContext.relatedActionIds], // 创建新的可变数组
-      relatedActionRequests,
-      relatedActionResponses,
+      relatedActionIds: Array.from(replyContext.relatedActionIds), // 创建新的可变数组
+      relatedActionRequests: Array.from(relatedActionRequests),
+      relatedActionResponses: Array.from(relatedActionResponses),
     };
 
     effects.push(replyEffect);

@@ -1,4 +1,4 @@
-import type { FrozenJson } from "@hstore/core";
+import type { Immutable } from "mutative";
 import type { AgentState, HistoryMessage } from "../agentState.ts";
 import type { UserMessageReceivedSignal } from "../agentSignal.ts";
 import { appendHistoryMessage } from "./utils.ts";
@@ -14,10 +14,10 @@ import { appendHistoryMessage } from "./utils.ts";
  * 
  * 注意：我们不会将消息插入到 historyMessages 中间，因为这会影响 effectsAt 的计算假设
  */
-export const handleUserMessageReceived = <T extends AgentState | FrozenJson<AgentState>>(
-  signal: UserMessageReceivedSignal,
-  state: T,
-): T => {
+export const handleUserMessageReceived = (
+  signal: Immutable<UserMessageReceivedSignal>,
+  state: Immutable<AgentState>,
+): Immutable<AgentState> => {
   const userMessage: HistoryMessage = {
     id: signal.messageId,
     type: "user",
@@ -38,6 +38,6 @@ export const handleUserMessageReceived = <T extends AgentState | FrozenJson<Agen
   return {
     ...state,
     historyMessages: newHistoryMessages,
-  } as T;
+  };
 };
 

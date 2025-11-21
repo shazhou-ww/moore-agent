@@ -1,4 +1,4 @@
-import type { FrozenJson } from "@hstore/core";
+import type { Immutable } from "mutative";
 import type { AgentState } from "../agentState.ts";
 import type { ActionCompletedSignal } from "../agentSignal.ts";
 
@@ -9,10 +9,10 @@ import type { ActionCompletedSignal } from "../agentSignal.ts";
  * - 将 action response 添加到 actionResponses（type: 'completed'）
  * - 注意：actionRequests 保留（用于历史追踪），不在此处移除
  */
-export const handleActionCompleted = <T extends AgentState | FrozenJson<AgentState>>(
-  signal: ActionCompletedSignal,
-  state: T,
-): T => {
+export const handleActionCompleted = (
+  signal: Immutable<ActionCompletedSignal>,
+  state: Immutable<AgentState>,
+): Immutable<AgentState> => {
   // 添加 action response（completed 类型）
   const newActionResponses = {
     ...state.actionResponses,
@@ -26,6 +26,6 @@ export const handleActionCompleted = <T extends AgentState | FrozenJson<AgentSta
   return {
     ...state,
     actionResponses: newActionResponses,
-  } as T;
+  } as Immutable<AgentState>;
 };
 

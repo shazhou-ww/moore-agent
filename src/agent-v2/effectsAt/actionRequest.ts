@@ -1,4 +1,4 @@
-import type { FrozenJson } from "@hstore/core";
+import type { Immutable } from "mutative";
 import type { AgentState } from "../agentState.ts";
 import type { ActionRequestEffect } from "../agentEffects.ts";
 
@@ -8,7 +8,7 @@ import type { ActionRequestEffect } from "../agentEffects.ts";
  * 所有有 parameters 但没有 response 的 action requests 都需要执行（可以并发）
  */
 export const extractActionRequestEffects = (
-  state: FrozenJson<AgentState>,
+  state: Immutable<AgentState>,
 ): ActionRequestEffect[] => {
   const effects: ActionRequestEffect[] = [];
 

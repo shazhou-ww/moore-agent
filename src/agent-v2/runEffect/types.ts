@@ -1,3 +1,4 @@
+import type { Immutable } from "mutative";
 import type { HistoryMessage } from "../agentState.ts";
 import type { AgentSignal } from "../agentSignal.ts";
 
@@ -5,7 +6,7 @@ import type { AgentSignal } from "../agentSignal.ts";
  * Effect 初始器类型（与 moorex 的 EffectInitializer 对应）
  */
 export type EffectInitializer = {
-  start: (dispatch: (signal: AgentSignal) => void) => Promise<void>;
+  start: (dispatch: (signal: Immutable<AgentSignal>) => void) => Promise<void>;
   cancel: () => void;
 };
 

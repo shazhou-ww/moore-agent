@@ -4,7 +4,7 @@ import {
   createLevelAdapter,
   type LevelAdapterOptions,
 } from "@hstore/leveldb-adapter";
-import { createStore, freezeJson, type Hash, type FrozenJson } from "@hstore/core";
+import { createStore, type Hash } from "@hstore/core";
 import {
   DEFAULT_LEVELDB_LOCATION,
   DEFAULT_CREATE_IF_MISSING,
@@ -70,7 +70,7 @@ export const createAgent = async (deps: AgentDeps): Promise<Agent> => {
   // 尝试加载最新状态
   const loadInitialState = async () => {
     const head = await store.head();
-    return head?.value ?? freezeJson({
+    return head?.value ?? {
       systemMessage: {
         id: createId(),
         kind: "system",
@@ -80,9 +80,9 @@ export const createAgent = async (deps: AgentDeps): Promise<Agent> => {
       messages: [],
       partialMessage: null,
       lastSentToLLMAt: before(now(), 1),
-    } as AgentState);
+    } as AgentState;
   }
-  const initialState: FrozenJson<AgentState> = await loadInitialState();
+  const initialState: AgentState = await loadInitialState();
 
   // 创建 runEffect 函数
   const runEffect = createRunEffect({
@@ -90,8 +90,8 @@ export const createAgent = async (deps: AgentDeps): Promise<Agent> => {
     callTool: deps.callTool,
   });
 
-  const machine = createMoorex<FrozenJson<AgentState>, Signal, Effect>({
-    initialState,
+  const machine = createMoorex<AgentState, Signal, Effect>({
+    initiate: () => initialState,
     transition,
     effectsAt,
     runEffect,

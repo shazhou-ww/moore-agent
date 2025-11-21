@@ -1,4 +1,4 @@
-import type { freezeJson, FrozenJson } from "@hstore/core";
+import type { Immutable } from "mutative";
 import type {
   AgentState,
   AssistantMessage,
@@ -72,7 +72,7 @@ const getUnfulfilledToolCalls = (
 /**
  * 根据状态推导需要执行的 effects
  */
-export const effectsAt = (state: FrozenJson<AgentState>): Effect[] => {
+export const effectsAt = (state: Immutable<AgentState>): Record<string, Immutable<Effect>> => {
   // 0. 优先检查是否有未完成的 assistant message
   if (state.partialMessage) {
     // 构建继续补全的 LLM call
@@ -99,14 +99,16 @@ export const effectsAt = (state: FrozenJson<AgentState>): Effect[] => {
       Do not explain anything. Just continue the text directly.
     `;
     
-    return [
-      {
-        key: makeLLMEffectKey(state.partialMessage.messageId),
-        kind: "call-llm",
-        prompt: continuationPrompt,
-        messageWindow: pendingMessages as MessageWindow,
-      },
-    ];
+    const effect: Effect = {
+      key: makeLLMEffectKey(state.partialMessage.messageId),
+      kind: "call-llm",
+      prompt: continuationPrompt,
+      messageWindow: Array.from(pendingMessages) as MessageWindow,
+    };
+    
+    return {
+      [effect.key]: effect as Immutable<Effect>,
+    };
   }
 
   // 1. 先检查待执行的工具调用
@@ -124,21 +126,23 @@ export const effectsAt = (state: FrozenJson<AgentState>): Effect[] => {
     if (unfulfilledToolCalls.length > 0) {
       // 选择最早的工具调用
       const firstToolCall = unfulfilledToolCalls[0]!;
-      return [
-        {
-          key: makeToolEffectKey(latestAssistantMessage.id, firstToolCall.id),
-          kind: "call-tool",
-          messageId: latestAssistantMessage.id,
-          call: {
-            id: firstToolCall.id,
-            name: firstToolCall.name,
-            input: firstToolCall.input,
-          },
+      const effect: Effect = {
+        key: makeToolEffectKey(latestAssistantMessage.id, firstToolCall.id),
+        kind: "call-tool",
+        messageId: latestAssistantMessage.id,
+        call: {
+          id: firstToolCall.id,
+          name: firstToolCall.name,
+          input: firstToolCall.input,
         },
-      ];
+      };
+      
+      return {
+        [effect.key]: effect as Immutable<Effect>,
+      };
     }
   }
-  
+
   // 2. 若无待执行工具调用，再检查待发送给 LLM 的消息
   const pendingMessages = getMessagesAfterLastSent(
     state.messages as ReadonlyArray<UserMessage | ToolMessage | AssistantMessage>,
@@ -148,17 +152,19 @@ export const effectsAt = (state: FrozenJson<AgentState>): Effect[] => {
   if (pendingMessages.length > 0) {
     // 生成新的 messageId 用于 assistant message
     const newMessageId = createId();
-    return [
-      {
-        key: makeLLMEffectKey(newMessageId),
-        kind: "call-llm",
-        prompt: state.systemMessage.content, // 使用 systemMessage 作为 prompt
-        messageWindow: pendingMessages as MessageWindow,
-      },
-    ];
+    const effect: Effect = {
+      key: makeLLMEffectKey(newMessageId),
+      kind: "call-llm",
+      prompt: state.systemMessage.content, // 使用 systemMessage 作为 prompt
+      messageWindow: Array.from(pendingMessages) as MessageWindow,
+    };
+    
+    return {
+      [effect.key]: effect as Immutable<Effect>,
+    };
   }
-  
-  // 3. 若以上各项均不存在，则返回空数组，表示当前 idle
-  return [];
+
+  // 3. 若以上各项均不存在，则返回空对象，表示当前 idle
+  return {};
 };
 

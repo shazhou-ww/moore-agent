@@ -1,4 +1,4 @@
-import type { FrozenJson } from "@hstore/core";
+import type { Immutable } from "mutative";
 import type { AgentState } from "../agentState.ts";
 import type { ActionRequestRefinedSignal } from "../agentSignal.ts";
 
@@ -9,10 +9,10 @@ import type { ActionRequestRefinedSignal } from "../agentSignal.ts";
  * - 将 action request 的参数添加到 actionParameters
  * - 注意：action request 本身已经在 reaction-complete 时创建，这里只是细化参数
  */
-export const handleActionRequestRefined = <T extends AgentState | FrozenJson<AgentState>>(
-  signal: ActionRequestRefinedSignal,
-  state: T,
-): T => {
+export const handleActionRequestRefined = (
+  signal: Immutable<ActionRequestRefinedSignal>,
+  state: Immutable<AgentState>,
+): Immutable<AgentState> => {
   // 检查 action request 是否存在
   if (!(signal.actionRequestId in state.actionRequests)) {
     console.warn(
@@ -31,6 +31,6 @@ export const handleActionRequestRefined = <T extends AgentState | FrozenJson<Age
   return {
     ...state,
     actionParameters: newActionParameters,
-  } as T;
+  } as Immutable<AgentState>;
 };
 

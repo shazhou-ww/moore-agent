@@ -1,3 +1,4 @@
+import type { Immutable } from "mutative";
 import type {
   Signal,
   AssistantMessage,
@@ -6,6 +7,7 @@ import type {
   UserMessage,
   AssistantChunkSignal,
   AssistantMessageCompleteSignal,
+  AgentState,
 } from "../types/schema.ts";
 import type {
   Effect,
@@ -49,14 +51,14 @@ const CHUNK_QUEUE_SIZE_THRESHOLD = 100; // 当 queue 中的 chunk 内容超过�
  * 创建 LLM effect 的初始器
  */
 const createLLMEffectInitializer = (
-  effect: CallLLMEffect,
+  effect: Immutable<CallLLMEffect>,
   callLLM: LLMCallFn,
 ) => {
   let canceled = false;
   const messageId = effect.key.replace("llm-", ""); // 从 key 中提取 messageId
 
   return {
-    start: async (dispatch: (signal: Signal) => void) => {
+    start: async (dispatch: (signal: Immutable<Signal>) => void) => {
       if (canceled) {
         return;
       }
@@ -83,7 +85,7 @@ const createLLMEffectInitializer = (
               chunk: mergedChunk,
               timestamp: now(),
             };
-            dispatch(chunkSignal);
+            dispatch(chunkSignal as Immutable<Signal>);
             chunkQueue = [];
             totalLength = 0;
           }
@@ -127,11 +129,11 @@ const createLLMEffectInitializer = (
               : [],
             timestamp: now(),
           };
-          dispatch(completeSignal);
+          dispatch(completeSignal as Immutable<Signal>);
         };
 
         // 调用 streaming LLM
-        await callLLM(prompt, effect.messageWindow, handleChunk, handleComplete);
+        await callLLM(prompt, Array.from(effect.messageWindow), handleChunk, handleComplete);
       } catch (error) {
         if (!canceled) {
           log("LLM call failed:", error);
@@ -149,13 +151,13 @@ const createLLMEffectInitializer = (
  * 创建 Tool effect 的初始器
  */
 const createToolEffectInitializer = (
-  effect: CallToolEffect,
+  effect: Immutable<CallToolEffect>,
   callTool: ToolCallFn,
 ) => {
   let canceled = false;
 
   return {
-    start: async (dispatch: (signal: Signal) => void) => {
+    start: async (dispatch: (signal: Immutable<Signal>) => void) => {
       if (canceled) {
         return;
       }
@@ -177,7 +179,7 @@ const createToolEffectInitializer = (
           timestamp: now(),
         };
 
-        dispatch(toolMessage);
+        dispatch(toolMessage as Immutable<Signal>);
       } catch (error) {
         if (!canceled) {
           log("Tool call failed:", error);
@@ -195,13 +197,16 @@ const createToolEffectInitializer = (
  * 创建 runEffect 函数
  */
 export const createRunEffect = (deps: RunEffectDeps) => {
-  const runEffect = (effect: Effect) => {
+  const runEffect = (
+    effect: Immutable<Effect>,
+    state: Immutable<AgentState>,
+  ) => {
     if (effect.kind === "call-llm") {
-      return createLLMEffectInitializer(effect, deps.callLLM);
+      return createLLMEffectInitializer(effect as Immutable<CallLLMEffect>, deps.callLLM);
     }
 
     if (effect.kind === "call-tool") {
-      return createToolEffectInitializer(effect, deps.callTool);
+      return createToolEffectInitializer(effect as Immutable<CallToolEffect>, deps.callTool);
     }
 
     // Exhaustiveness check

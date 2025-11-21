@@ -1,4 +1,4 @@
-import type { FrozenJson } from "@hstore/core";
+import type { Immutable } from "mutative";
 import type { AgentState, AssistantChunk, ReplyToUserContext } from "../agentState.ts";
 import type { AssistantChunkReceivedSignal } from "../agentSignal.ts";
 
@@ -10,10 +10,10 @@ import type { AssistantChunkReceivedSignal } from "../agentSignal.ts";
  * - 通过 messageId 直接索引对应的 reply context
  * - 不更新 lastReactionTimestamp（streaming 尚未完成）
  */
-export const handleAssistantChunkReceived = <T extends AgentState | FrozenJson<AgentState>>(
-  signal: AssistantChunkReceivedSignal,
-  state: T,
-): T => {
+export const handleAssistantChunkReceived = (
+  signal: Immutable<AssistantChunkReceivedSignal>,
+  state: Immutable<AgentState>,
+): Immutable<AgentState> => {
   const newChunk: AssistantChunk = {
     content: signal.chunk,
   };
@@ -40,6 +40,6 @@ export const handleAssistantChunkReceived = <T extends AgentState | FrozenJson<A
   return {
     ...state,
     replies: newReplies,
-  } as T;
+  };
 };
 

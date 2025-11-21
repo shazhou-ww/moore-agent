@@ -1,4 +1,4 @@
-import type { FrozenJson } from "@hstore/core";
+import type { Immutable } from "mutative";
 import type { AgentState, HistoryMessage } from "../agentState.ts";
 import type { AssistantMessageCompleteSignal } from "../agentSignal.ts";
 import { appendHistoryMessage } from "./utils.ts";
@@ -16,10 +16,10 @@ import { appendHistoryMessage } from "./utils.ts";
  * 
  * 注意：我们不会将消息插入到 historyMessages 中间，因为这会影响 effectsAt 的计算假设
  */
-export const handleAssistantMessageComplete = <T extends AgentState | FrozenJson<AgentState>>(
-  signal: AssistantMessageCompleteSignal,
-  state: T,
-): T => {
+export const handleAssistantMessageComplete = (
+  signal: Immutable<AssistantMessageCompleteSignal>,
+  state: Immutable<AgentState>,
+): Immutable<AgentState> => {
   // 直接通过 messageId 索引对应的 context
   const context = state.replies[signal.messageId];
   if (!context) {
@@ -53,7 +53,7 @@ export const handleAssistantMessageComplete = <T extends AgentState | FrozenJson
     return {
       ...state,
       replies: newReplies,
-    } as T;
+    } as Immutable<AgentState>;
   }
 
   // 成功追加，更新相关状态（不更新 lastReactionTimestamp）
@@ -61,6 +61,6 @@ export const handleAssistantMessageComplete = <T extends AgentState | FrozenJson
     ...state,
     historyMessages: newHistoryMessages,
     replies: newReplies,
-  } as T;
+  } as Immutable<AgentState>;
 };
 

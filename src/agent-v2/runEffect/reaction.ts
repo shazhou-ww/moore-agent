@@ -1,3 +1,4 @@
+import type { Immutable } from "mutative";
 import type { AgentEffect } from "../agentEffects.ts";
 import type { AgentSignal, ReactionCompleteSignal } from "../agentSignal.ts";
 import type { EffectInitializer, InvokeLLMFn, GetSystemPromptsFn } from "./types.ts";
@@ -8,7 +9,7 @@ import { now } from "../../utils/time.ts";
  * 创建 ReactionEffect 的初始器
  */
 export const createReactionEffectInitializer = (
-  effect: Extract<AgentEffect, { kind: "reaction" }>,
+  effect: Immutable<Extract<AgentEffect, { kind: "reaction" }>>,
   invokeLLM: InvokeLLMFn,
   getSystemPrompts: GetSystemPromptsFn,
 ): EffectInitializer => {
@@ -17,7 +18,7 @@ export const createReactionEffectInitializer = (
   const reactionHash = effect.key.replace("reaction-", "");
 
   return {
-    start: async (dispatch: (signal: AgentSignal) => void) => {
+    start: async (dispatch: (signal: Immutable<AgentSignal>) => void) => {
       if (canceled) {
         return;
       }
@@ -29,7 +30,7 @@ export const createReactionEffectInitializer = (
         // 使用 newUserMessages 作为 messageWindow（新的用户输入）
         // 注意：根据新的设计，messageWindow 不必要，但 LLM 调用需要它
         // 这里使用 newUserMessages 作为基础消息窗口
-        const messageWindow = effect.newUserMessages;
+        const messageWindow = Array.from(effect.newUserMessages);
         
         const result = await invokeLLM(systemPrompts, messageWindow);
 
@@ -51,7 +52,7 @@ export const createReactionEffectInitializer = (
           timestamp: now(),
         };
 
-        dispatch(signal);
+        dispatch(signal as Immutable<AgentSignal>);
       } catch (error) {
         if (!canceled) {
           console.error("ReactionEffect failed:", error);

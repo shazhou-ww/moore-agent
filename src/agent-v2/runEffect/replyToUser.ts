@@ -1,3 +1,4 @@
+import type { Immutable } from "mutative";
 import type { AgentEffect } from "../agentEffects.ts";
 import type {
   AgentSignal,
@@ -16,7 +17,7 @@ import { now } from "../../utils/time.ts";
  * 创建 ReplyToUserEffect 的初始器
  */
 export const createReplyToUserEffectInitializer = (
-  effect: Extract<AgentEffect, { kind: "reply-to-user" }>,
+  effect: Immutable<Extract<AgentEffect, { kind: "reply-to-user" }>>,
   streamLLM: StreamLLMFn,
   sendUserMessageChunk: SendUserMessageChunkFn,
   completeUserMessage: CompleteUserMessageFn,
@@ -26,7 +27,7 @@ export const createReplyToUserEffectInitializer = (
   const messageId = effect.key;
 
   return {
-    start: async (dispatch: (signal: AgentSignal) => void) => {
+    start: async (dispatch: (signal: Immutable<AgentSignal>) => void) => {
       if (canceled) {
         return;
       }
@@ -50,7 +51,7 @@ export const createReplyToUserEffectInitializer = (
               chunk: mergedChunk,
               timestamp: now(),
             };
-            dispatch(chunkSignal);
+            dispatch(chunkSignal as Immutable<AgentSignal>);
 
             chunkQueue = [];
             totalLength = 0;
@@ -72,7 +73,7 @@ export const createReplyToUserEffectInitializer = (
         };
 
         // 调用流式 LLM
-        await streamLLM(effect.systemPrompts, effect.relatedHistoryMessages, handleChunk);
+        await streamLLM(effect.systemPrompts, Array.from(effect.relatedHistoryMessages), handleChunk);
 
         if (canceled) {
           return;
@@ -90,7 +91,7 @@ export const createReplyToUserEffectInitializer = (
           messageId,
           timestamp: now(),
         };
-        dispatch(completeSignal);
+        dispatch(completeSignal as Immutable<AgentSignal>);
       } catch (error) {
         if (!canceled) {
           console.error("ReplyToUserEffect failed:", error);

@@ -1,4 +1,4 @@
-import type { FrozenJson } from "@hstore/core";
+import type { Immutable } from "mutative";
 import type { AgentState } from "../agentState.ts";
 import type { ReactionEffect } from "../agentEffects.ts";
 import { createHash } from "crypto";
@@ -8,7 +8,7 @@ import { createHash } from "crypto";
  */
 const getActionStatus = (
   actionRequestId: string,
-  actionResponses: AgentState["actionResponses"],
+  actionResponses: Immutable<AgentState["actionResponses"]>,
 ): "ongoing" | "completed" | "cancelled" => {
   const response = actionResponses[actionRequestId];
   if (!response) {
@@ -30,7 +30,7 @@ const getActionStatus = (
  * Key 生成：由 <timestamp, latestActionResponseId, latestUserMessageId> hash 计算得来
  */
 export const extractReactionEffect = (
-  state: FrozenJson<AgentState>,
+  state: Immutable<AgentState>,
 ): ReactionEffect | null => {
   // 找到比 lastReactionTimestamp 更新的 UserMessage
   const newUserMessages = state.historyMessages.filter(
@@ -93,9 +93,9 @@ export const extractReactionEffect = (
   const reactionEffect: ReactionEffect = {
     key: reactionKey,
     kind: "reaction",
-    newUserMessages,
-    newActionResponses,
-    actionRequests,
+    newUserMessages: Array.from(newUserMessages),
+    newActionResponses: Array.from(newActionResponses),
+    actionRequests: Array.from(actionRequests),
     timestamp,
   };
 

@@ -1,3 +1,4 @@
+import type { Immutable } from "mutative";
 import type { AgentEffect } from "../agentEffects.ts";
 import type { AgentSignal, ActionCompletedSignal } from "../agentSignal.ts";
 import type {
@@ -11,7 +12,7 @@ import { now } from "../../utils/time.ts";
  * 创建 ActionRequestEffect 的初始器
  */
 export const createActionRequestEffectInitializer = (
-  effect: Extract<AgentEffect, { kind: "action-request" }>,
+  effect: Immutable<Extract<AgentEffect, { kind: "action-request" }>>,
   callAction: CallActionFn,
   getActionParameters: GetActionParametersFn,
 ): EffectInitializer => {
@@ -20,7 +21,7 @@ export const createActionRequestEffectInitializer = (
   const actionRequestId = effect.key.replace("action-request-", "");
 
   return {
-    start: async (dispatch: (signal: AgentSignal) => void) => {
+    start: async (dispatch: (signal: Immutable<AgentSignal>) => void) => {
       if (canceled) {
         return;
       }
@@ -49,7 +50,7 @@ export const createActionRequestEffectInitializer = (
           timestamp: now(),
         };
 
-        dispatch(signal);
+        dispatch(signal as Immutable<AgentSignal>);
       } catch (error) {
         if (!canceled) {
           console.error("ActionRequestEffect failed:", error);
