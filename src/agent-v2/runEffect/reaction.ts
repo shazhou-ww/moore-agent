@@ -1,4 +1,5 @@
 import type { Immutable } from "mutative";
+import type { AgentState } from "../agentState.ts";
 import type { AgentEffect } from "../agentEffects.ts";
 import type { AgentSignal, ReactionCompleteSignal } from "../agentSignal.ts";
 import type { EffectInitializer, InvokeLLMFn, GetSystemPromptsFn } from "./types.ts";
@@ -10,12 +11,13 @@ import { now } from "../../utils/time.ts";
  */
 export const createReactionEffectInitializer = (
   effect: Immutable<Extract<AgentEffect, { kind: "reaction" }>>,
+  state: Immutable<AgentState>,
   invokeLLM: InvokeLLMFn,
   getSystemPrompts: GetSystemPromptsFn,
 ): EffectInitializer => {
   let canceled = false;
-  // 从 key 中提取 hash（例如 "reaction-{hash}"）
-  const reactionHash = effect.key.replace("reaction-", "");
+  // 使用 timestamp 生成 reaction hash（用于 signal 中的 messageId）
+  const reactionHash = `reaction-${effect.timestamp}`;
 
   return {
     start: async (dispatch: (signal: Immutable<AgentSignal>) => void) => {
@@ -27,10 +29,13 @@ export const createReactionEffectInitializer = (
         // 从 state 获取 systemPrompts
         const systemPrompts = getSystemPrompts();
         
+        // 从 state 获取新的用户消息（timestamp > lastReactionTimestamp）
+        const newUserMessages = state.historyMessages.filter(
+          (msg) => msg.type === "user" && msg.timestamp > state.lastReactionTimestamp,
+        );
+        
         // 使用 newUserMessages 作为 messageWindow（新的用户输入）
-        // 注意：根据新的设计，messageWindow 不必要，但 LLM 调用需要它
-        // 这里使用 newUserMessages 作为基础消息窗口
-        const messageWindow = Array.from(effect.newUserMessages);
+        const messageWindow = Array.from(newUserMessages);
         
         const result = await invokeLLM(systemPrompts, messageWindow);
 

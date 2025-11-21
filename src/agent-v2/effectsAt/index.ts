@@ -16,6 +16,25 @@ import { extractActionRequestEffects } from "./actionRequest.ts";
  * 3. RefineActionCallEffect - 所有没有 parameters 的 action requests 都需要细化（可以并发）
  * 4. ActionRequestEffect - 所有有 parameters 但没有 response 的 action requests 都需要执行（可以并发）
  */
+/**
+ * 为 effect 生成唯一的 key（用于 Record）
+ */
+const getEffectKey = (effect: AgentEffect): string => {
+  switch (effect.kind) {
+    case "reaction":
+      return `reaction-${effect.timestamp}`;
+    case "reply-to-user":
+      return `reply-${effect.messageId}`;
+    case "refine-action-call":
+      return `refine-action-${effect.actionRequestId}`;
+    case "action-request":
+      return `action-request-${effect.actionRequestId}`;
+    default:
+      const _exhaustive: never = effect;
+      throw new Error(`Unknown effect kind: ${(_exhaustive as AgentEffect).kind}`);
+  }
+};
+
 export const effectsAt = (state: Immutable<AgentState>): Record<string, Immutable<AgentEffect>> => {
   const reactionEffect = extractReactionEffect(state);
   const effects: AgentEffect[] = [
@@ -28,7 +47,7 @@ export const effectsAt = (state: Immutable<AgentState>): Record<string, Immutabl
   // 转换为 Record<string, Immutable<AgentEffect>>
   const result: Record<string, Immutable<AgentEffect>> = {};
   for (const effect of effects) {
-    result[effect.key] = effect as Immutable<AgentEffect>;
+    result[getEffectKey(effect)] = effect as Immutable<AgentEffect>;
   }
   return result;
 };

@@ -1,4 +1,5 @@
 import type { Immutable } from "mutative";
+import type { AgentState, HistoryMessage } from "../agentState.ts";
 import type { AgentEffect } from "../agentEffects.ts";
 import type {
   AgentSignal,
@@ -18,13 +19,14 @@ import { now } from "../../utils/time.ts";
  */
 export const createReplyToUserEffectInitializer = (
   effect: Immutable<Extract<AgentEffect, { kind: "reply-to-user" }>>,
+  state: Immutable<AgentState>,
   streamLLM: StreamLLMFn,
   sendUserMessageChunk: SendUserMessageChunkFn,
   completeUserMessage: CompleteUserMessageFn,
 ): EffectInitializer => {
   let canceled = false;
-  // messageId 就是 effect.key（例如 "reply-{hash}"）
-  const messageId = effect.key;
+  // messageId 从 effect 中获取
+  const messageId = effect.messageId;
 
   return {
     start: async (dispatch: (signal: Immutable<AgentSignal>) => void) => {
@@ -33,6 +35,35 @@ export const createReplyToUserEffectInitializer = (
       }
 
       try {
+        // 从 state.replies[messageId] 获取上下文
+        const replyContext = state.replies[messageId];
+        if (!replyContext) {
+          throw new Error(`Reply context not found for messageId: ${messageId}`);
+        }
+
+        // 从 state 获取 systemPrompts
+        const systemPrompts = state.systemPrompts;
+
+        // 收集相关的历史消息（从第一条消息到 lastHistoryMessageId 的所有消息）
+        const relatedHistoryMessages: HistoryMessage[] = [];
+        let foundLastMessage = false;
+        
+        // 从后往前遍历，找到 lastHistoryMessageId，然后收集从起点到它的所有消息
+        for (let i = state.historyMessages.length - 1; i >= 0; i--) {
+          const msg = state.historyMessages[i]!;
+          if (msg.id === replyContext.lastHistoryMessageId) {
+            foundLastMessage = true;
+          }
+          if (foundLastMessage) {
+            relatedHistoryMessages.unshift(msg);
+          }
+        }
+
+        // 如果找不到 lastHistoryMessageId，使用所有历史消息作为后备
+        if (!foundLastMessage) {
+          relatedHistoryMessages.push(...state.historyMessages);
+        }
+
         let chunkQueue: string[] = [];
         let totalLength = 0;
         const CHUNK_QUEUE_SIZE_THRESHOLD = 100; // chunk 合并阈值
@@ -73,7 +104,7 @@ export const createReplyToUserEffectInitializer = (
         };
 
         // 调用流式 LLM
-        await streamLLM(effect.systemPrompts, Array.from(effect.relatedHistoryMessages), handleChunk);
+        await streamLLM(systemPrompts, Array.from(relatedHistoryMessages), handleChunk);
 
         if (canceled) {
           return;

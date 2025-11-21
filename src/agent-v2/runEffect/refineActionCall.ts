@@ -1,4 +1,5 @@
 import type { Immutable } from "mutative";
+import type { AgentState } from "../agentState.ts";
 import type { AgentEffect } from "../agentEffects.ts";
 import type { AgentSignal, ActionRequestRefinedSignal } from "../agentSignal.ts";
 import type { EffectInitializer, InvokeLLMFn } from "./types.ts";
@@ -9,11 +10,12 @@ import { now } from "../../utils/time.ts";
  */
 export const createRefineActionCallEffectInitializer = (
   effect: Immutable<Extract<AgentEffect, { kind: "refine-action-call" }>>,
+  state: Immutable<AgentState>,
   invokeLLM: InvokeLLMFn,
 ): EffectInitializer => {
   let canceled = false;
-  // 从 key 中提取 actionRequestId（例如 "refine-action-{actionRequestId}"）
-  const actionRequestId = effect.key.replace("refine-action-", "");
+  // actionRequestId 从 effect 中获取
+  const actionRequestId = effect.actionRequestId;
 
   return {
     start: async (dispatch: (signal: Immutable<AgentSignal>) => void) => {
@@ -22,7 +24,25 @@ export const createRefineActionCallEffectInitializer = (
       }
 
       try {
-        const result = await invokeLLM(effect.systemPrompts, Array.from(effect.messageWindow));
+        // 从 state 获取 action request
+        const request = state.actionRequests[actionRequestId];
+        if (!request) {
+          throw new Error(`Action request not found for actionRequestId: ${actionRequestId}`);
+        }
+
+        // 从 state 获取 action 定义
+        const actionDefinition = state.actions[request.actionName];
+        if (!actionDefinition) {
+          throw new Error(`Action definition not found for actionName: ${request.actionName}`);
+        }
+
+        // 从 state 获取 systemPrompts
+        const systemPrompts = state.systemPrompts;
+
+        // 从 state 获取历史消息窗口
+        const messageWindow = Array.from(state.historyMessages);
+
+        const result = await invokeLLM(systemPrompts, messageWindow);
 
         if (canceled) {
           return;

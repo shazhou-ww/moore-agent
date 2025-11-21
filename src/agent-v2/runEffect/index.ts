@@ -26,16 +26,17 @@ export const createRunEffect = (options: RunEffectOptions) => {
     state: Immutable<AgentState>,
   ): EffectInitializer => {
     if (effect.kind === "reaction") {
-      return createReactionEffectInitializer(effect as Immutable<import("../agentEffects.ts").ReactionEffect>, invokeLLM, getSystemPrompts);
+      return createReactionEffectInitializer(effect as Immutable<import("../agentEffects.ts").ReactionEffect>, state, invokeLLM, getSystemPrompts);
     }
 
     if (effect.kind === "refine-action-call") {
-      return createRefineActionCallEffectInitializer(effect as Immutable<import("../agentEffects.ts").RefineActionCallEffect>, invokeLLM);
+      return createRefineActionCallEffectInitializer(effect as Immutable<import("../agentEffects.ts").RefineActionCallEffect>, state, invokeLLM);
     }
 
     if (effect.kind === "reply-to-user") {
       return createReplyToUserEffectInitializer(
         effect as Immutable<import("../agentEffects.ts").ReplyToUserEffect>,
+        state,
         streamLLM,
         sendUserMessageChunk,
         completeUserMessage,
@@ -43,7 +44,7 @@ export const createRunEffect = (options: RunEffectOptions) => {
     }
 
     if (effect.kind === "action-request") {
-      return createActionRequestEffectInitializer(effect as Immutable<import("../agentEffects.ts").ActionRequestEffect>, callAction, getActionParameters);
+      return createActionRequestEffectInitializer(effect as Immutable<import("../agentEffects.ts").ActionRequestEffect>, state, callAction, getActionParameters);
     }
 
     // Exhaustiveness check
