@@ -15,7 +15,7 @@
     "debug": "^4.4.3",
     "dotenv": "^17.2.3",
     "express": "^4.18.2",
-    "moorex": "^0.2.2-alpha-2",
+    "moorex": "^0.2.2",
     "murmurhash": "^2.0.1",
     "nanoid": "^5.1.6",
     "neverthrow": "^8.2.0",
