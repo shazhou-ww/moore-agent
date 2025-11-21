@@ -2,11 +2,7 @@ import type { Immutable } from "mutative";
 import type { AgentState } from "../agentState.ts";
 import type { RefineActionCallEffect } from "../agentEffects.ts";
 import type { AgentSignal, ActionRequestRefinedSignal } from "../agentSignal.ts";
-import type {
-  EffectInitializer,
-  InvokeLLMFn,
-  GetActionParameterSchemaFn,
-} from "./types.ts";
+import type { EffectInitializer, RunEffectOptions } from "./types.ts";
 import type { Dispatch } from "./effectInitializer.ts";
 import { createEffectInitializer } from "./effectInitializer.ts";
 import { now } from "../../utils/time.ts";
@@ -17,10 +13,12 @@ import { now } from "../../utils/time.ts";
 export const createRefineActionCallEffectInitializer = (
   effect: Immutable<RefineActionCallEffect>,
   state: Immutable<AgentState>,
-  invokeLLM: InvokeLLMFn,
-  getActionParameterSchema: GetActionParameterSchemaFn,
-): EffectInitializer =>
-  createEffectInitializer(
+  key: string,
+  options: RunEffectOptions,
+): EffectInitializer => {
+  const { invokeLLM, getActionParameterSchema } = options;
+  
+  return createEffectInitializer(
     async (dispatch: Dispatch, isCancelled: () => boolean) => {
       // actionRequestId 从 effect 中获取
       const actionRequestId = effect.actionRequestId;
@@ -107,4 +105,5 @@ Please generate parameters that conform to the provided JSON Schema based on the
       }
     },
   );
+};
 

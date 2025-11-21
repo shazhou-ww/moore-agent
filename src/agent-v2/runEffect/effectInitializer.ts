@@ -20,11 +20,11 @@ export const createEffectInitializer = (
   return {
     start: async (dispatch: Dispatch) => {
       try {
-        await start(dispatch, () => canceled);
-      } catch (error) {
         if (!canceled) {
-          console.warn("Effect failed:", error);
+          await start(dispatch, () => canceled);
         }
+      } catch (error) {
+        console.warn("Effect failed:", error);
       }
     },
     cancel: () => {

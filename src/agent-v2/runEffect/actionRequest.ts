@@ -1,7 +1,7 @@
 import type { Immutable } from "mutative";
 import type { AgentState } from "../agentState.ts";
 import type { ActionRequestEffect } from "../agentEffects.ts";
-import type { EffectInitializer, CallActionFn } from "./types.ts";
+import type { EffectInitializer, RunEffectOptions } from "./types.ts";
 import type { Dispatch } from "./effectInitializer.ts";
 import { createEffectInitializer } from "./effectInitializer.ts";
 import { now } from "../../utils/time.ts";
@@ -12,14 +12,13 @@ import { now } from "../../utils/time.ts";
 export const createActionRequestEffectInitializer = (
   effect: Immutable<ActionRequestEffect>,
   state: Immutable<AgentState>,
-  callAction: CallActionFn,
+  key: string,
+  options: RunEffectOptions
 ): EffectInitializer =>
   createEffectInitializer(
     async (dispatch: Dispatch, isCancelled: () => boolean) => {
-      // actionRequestId 从 effect 中获取
+      const { callAction } = options;
       const { actionRequestId } = effect;
-
-      if (isCancelled()) return;
 
       // 从 state 获取 action request
       const request = state.actionRequests[actionRequestId];
@@ -51,6 +50,5 @@ export const createActionRequestEffectInitializer = (
         result,
         timestamp: now(),
       });
-    },
+    }
   );
-

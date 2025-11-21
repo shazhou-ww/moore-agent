@@ -6,12 +6,7 @@ import type {
   AssistantChunkReceivedSignal,
   AssistantMessageCompleteSignal,
 } from "../agentSignal.ts";
-import type {
-  EffectInitializer,
-  StreamLLMFn,
-  SendUserMessageChunkFn,
-  CompleteUserMessageFn,
-} from "./types.ts";
+import type { EffectInitializer, RunEffectOptions } from "./types.ts";
 import type { Dispatch } from "./effectInitializer.ts";
 import { createEffectInitializer } from "./effectInitializer.ts";
 import { now } from "../../utils/time.ts";
@@ -22,11 +17,12 @@ import { now } from "../../utils/time.ts";
 export const createReplyToUserEffectInitializer = (
   effect: Immutable<ReplyToUserEffect>,
   state: Immutable<AgentState>,
-  streamLLM: StreamLLMFn,
-  sendUserMessageChunk: SendUserMessageChunkFn,
-  completeUserMessage: CompleteUserMessageFn,
-): EffectInitializer =>
-  createEffectInitializer(
+  key: string,
+  options: RunEffectOptions,
+): EffectInitializer => {
+  const { streamLLM, sendUserMessageChunk, completeUserMessage } = options;
+  
+  return createEffectInitializer(
     async (dispatch: Dispatch, isCancelled: () => boolean) => {
       // messageId 从 effect 中获取
       const messageId = effect.messageId;
@@ -136,4 +132,5 @@ export const createReplyToUserEffectInitializer = (
       }
     },
   );
+};
 

@@ -1,8 +1,9 @@
+import { v4 } from "uuid";
 import type { Immutable } from "mutative";
 import type { AgentState } from "../agentState.ts";
 import type { ReactionEffect } from "../agentEffects.ts";
 import type { AgentSignal, ReactionCompleteSignal } from "../agentSignal.ts";
-import type { EffectInitializer, InvokeLLMFn, GetSystemPromptsFn } from "./types.ts";
+import type { EffectInitializer, RunEffectOptions } from "./types.ts";
 import type { Dispatch } from "./effectInitializer.ts";
 import { createEffectInitializer } from "./effectInitializer.ts";
 import { parseJSONResponse } from "./types.ts";
@@ -14,13 +15,13 @@ import { now } from "../../utils/time.ts";
 export const createReactionEffectInitializer = (
   effect: Immutable<ReactionEffect>,
   state: Immutable<AgentState>,
-  invokeLLM: InvokeLLMFn,
-  getSystemPrompts: GetSystemPromptsFn,
-): EffectInitializer =>
-  createEffectInitializer(
+  key: string,
+  options: RunEffectOptions,
+): EffectInitializer => {
+  const { invokeLLM, getSystemPrompts } = options;
+  
+  return createEffectInitializer(
     async (dispatch: Dispatch, isCancelled: () => boolean) => {
-      // 使用 timestamp 生成 reaction hash（用于 signal 中的 messageId）
-      const reactionHash = `reaction-${effect.timestamp}`;
       if (isCancelled()) {
         return;
       }
@@ -52,7 +53,7 @@ export const createReactionEffectInitializer = (
 
         const signal: ReactionCompleteSignal = {
           kind: "reaction-complete",
-          messageId: reactionHash, // 使用 reaction hash 作为 messageId
+          messageId: v4(),
           decision,
           timestamp: now(),
         };
@@ -66,4 +67,5 @@ export const createReactionEffectInitializer = (
       }
     },
   );
+};
 

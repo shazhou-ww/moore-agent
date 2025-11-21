@@ -11,54 +11,24 @@ import type { EffectInitializer, RunEffectOptions } from "./types.ts";
  * 创建 runEffect 函数
  */
 export const createRunEffect = (options: RunEffectOptions) => {
-  const {
-    invokeLLM,
-    streamLLM,
-    callAction,
-    getActionParameterSchema,
-    getSystemPrompts,
-    sendUserMessageChunk,
-    completeUserMessage,
-  } = options;
-
   const runEffect = (
     effect: Immutable<AgentEffect>,
     state: Immutable<AgentState>,
+    key: string,
   ): EffectInitializer => {
-    if (effect.kind === "reaction") {
-      return createReactionEffectInitializer(effect as Immutable<import("../agentEffects.ts").ReactionEffect>, state, invokeLLM, getSystemPrompts);
+    switch (effect.kind) {
+      case "reaction":
+        return createReactionEffectInitializer(effect, state, key, options);
+      case "refine-action-call":
+        return createRefineActionCallEffectInitializer(effect, state, key, options);
+      case "reply-to-user":
+        return createReplyToUserEffectInitializer(effect, state, key, options);
+      case "action-request":
+        return createActionRequestEffectInitializer(effect, state, key, options);
+      default:
+        const _exhaustive: never = effect;
+        throw new Error(`Unknown effect kind: ${(_exhaustive as AgentEffect).kind}`);
     }
-
-    if (effect.kind === "refine-action-call") {
-      return createRefineActionCallEffectInitializer(
-        effect as Immutable<import("../agentEffects.ts").RefineActionCallEffect>,
-        state,
-        invokeLLM,
-        getActionParameterSchema,
-      );
-    }
-
-    if (effect.kind === "reply-to-user") {
-      return createReplyToUserEffectInitializer(
-        effect as Immutable<import("../agentEffects.ts").ReplyToUserEffect>,
-        state,
-        streamLLM,
-        sendUserMessageChunk,
-        completeUserMessage,
-      );
-    }
-
-    if (effect.kind === "action-request") {
-      return createActionRequestEffectInitializer(
-        effect as Immutable<import("../agentEffects.ts").ActionRequestEffect>,
-        state,
-        callAction,
-      );
-    }
-
-    // Exhaustiveness check
-    const _exhaustive: never = effect;
-    throw new Error(`Unknown effect kind: ${(_exhaustive as AgentEffect).kind}`);
   };
 
   return runEffect;
