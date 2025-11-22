@@ -98,11 +98,15 @@ export const createReplyToUserEffectInitializer = (
         replyContext.relatedActionIds
       ) as Record<string, Action>;
 
+      // 获取已发送的内容（从 chunks 中提取），如果没有则传空字符串
+      const sentContent = replyContext.chunks.map((chunk) => chunk.content).join("")
+
       // 调用流式 LLM（speak）：向用户解释说明
       const chunkGenerator = await speak(
         state.systemPrompts,
         Array.from(relatedHistoryMessages),
-        relatedActions
+        relatedActions,
+        sentContent
       );
       for await (const chunk of chunkGenerator) {
         if (isCancelled()) {

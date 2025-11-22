@@ -81,12 +81,36 @@ export const createSpeakFn = (model: LargeLanguageModel): SpeakFn => {
     systemPrompts: string,
     messageWindow: HistoryMessage[],
     relatedActions: Record<string, Action>,
+    sentContent: string,
   ): Promise<AsyncGenerator<string>> => {
     log("Calling speak model:", model.model);
     log("Message window size:", messageWindow.length);
     log("Related actions count:", Object.keys(relatedActions).length);
 
     try {
+      // 如果有已发送的内容，构建接续提示
+      const continuationPrompt = sentContent
+        ? `
+You are a model that is resuming a previously interrupted generation.
+
+Below is the content you have already generated (partial output):
+
+=== BEGIN PARTIAL OUTPUT ===
+${sentContent}
+=== END PARTIAL OUTPUT ===
+
+Continue generating the text from after the END PARTIAL OUTPUT.
+Do not repeat any sentences from the partial output.
+Do not rewrite or modify the existing content.
+Do not explain anything. Just continue the text directly.
+`
+        : null;
+
+      // 合并 system prompts：如果有接续提示，将其添加到 system prompts 前面
+      const finalSystemPrompts = continuationPrompt
+        ? `${continuationPrompt}\n\n${systemPrompts}`
+        : systemPrompts;
+
       // 构建消息列表
       const actionsContext =
         Object.keys(relatedActions).length > 0
@@ -103,9 +127,9 @@ export const createSpeakFn = (model: LargeLanguageModel): SpeakFn => {
           : null;
 
       const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = compact([
-        systemPrompts && {
+        finalSystemPrompts && {
           role: "system",
-          content: systemPrompts,
+          content: finalSystemPrompts,
         },
         ...map(messageWindow, (msg) => ({
           role: msg.type === "user" ? "user" : "assistant",
