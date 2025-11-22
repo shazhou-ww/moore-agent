@@ -7,7 +7,8 @@ import type { EffectInitializer, RunEffectOptions } from "../types.ts";
 import type { Dispatch } from "../effectInitializer.ts";
 import { createEffectInitializer } from "../effectInitializer.ts";
 import { now } from "../../../utils/time.ts";
-import { createDecideTool, decideFunctionCallSchema, type DecideFunctionCall } from "./toolSchema.ts";
+import { iterationDecisionSchema, type IterationDecision } from "./toolSchema.ts";
+import { toJSONSchema } from "zod";
 import { buildSystemPrompt } from "./prompt.ts";
 import {
   collectUnrespondedItems,
@@ -17,15 +18,15 @@ import {
 } from "./utils.ts";
 
 /**
- * 解析 LLM 返回的 decide 函数调用结果
+ * 解析 LLM 返回的迭代决策结果
  */
-const parseDecideFunctionCall = (result: string): DecideFunctionCall => {
+const parseDecideFunctionCall = (result: string): IterationDecision => {
   try {
     // 尝试解析为直接的函数调用结果
     const parsed = JSON.parse(result);
     if (parsed.type) {
       // 验证并解析
-      return decideFunctionCallSchema.parse(parsed);
+      return iterationDecisionSchema.parse(parsed);
     } else if (parsed.tool_calls && parsed.tool_calls.length > 0) {
       // 如果是工具调用格式，提取第一个工具调用的参数
       const toolCall = parsed.tool_calls[0];
@@ -33,16 +34,16 @@ const parseDecideFunctionCall = (result: string): DecideFunctionCall => {
         const args = typeof toolCall.function.arguments === "string"
           ? JSON.parse(toolCall.function.arguments)
           : toolCall.function.arguments;
-        return decideFunctionCallSchema.parse(args);
+        return iterationDecisionSchema.parse(args);
       }
     }
-    throw new Error(`Failed to parse decide function call: missing type or tool_calls in response: ${result}`);
+    throw new Error(`Failed to parse iteration decision: missing type or tool_calls in response: ${result}`);
   } catch (error) {
     // 如果解析失败，直接抛出错误
     if (error instanceof Error) {
-      throw new Error(`Failed to parse decide function call from LLM response: ${error.message}. Response: ${result}`);
+      throw new Error(`Failed to parse iteration decision from LLM response: ${error.message}. Response: ${result}`);
     }
-    throw new Error(`Failed to parse decide function call from LLM response: ${String(error)}. Response: ${result}`);
+    throw new Error(`Failed to parse iteration decision from LLM response: ${String(error)}. Response: ${result}`);
   }
 };
 
@@ -56,7 +57,7 @@ export const createReactionEffectInitializer = (
   options: RunEffectOptions,
 ): EffectInitializer => {
   const {
-    invokeLLM,
+    think,
     getSystemPrompts,
     actions,
     reactionInitialHistoryRounds,
@@ -139,13 +140,12 @@ export const createReactionEffectInitializer = (
             totalRounds,
           );
 
-          // 调用 LLM（带工具函数）
-          const decideTool = createDecideTool();
-          const result = await invokeLLM(
-            "reaction",
+          // 调用 LLM（think）：思考下一步决策
+          const decideOutputSchema = toJSONSchema(iterationDecisionSchema);
+          const result = await think(
             systemPrompt,
             messageWindow,
-            [decideTool],
+            decideOutputSchema,
           );
 
           if (isCancelled()) {

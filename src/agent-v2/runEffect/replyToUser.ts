@@ -20,7 +20,7 @@ export const createReplyToUserEffectInitializer = (
   key: string,
   options: RunEffectOptions,
 ): EffectInitializer => {
-  const { streamLLM, sendUserMessageChunk, completeUserMessage } = options;
+  const { speak, sendUserMessageChunk, completeUserMessage } = options;
   
   return createEffectInitializer(
     async (dispatch: Dispatch, isCancelled: () => boolean) => {
@@ -99,9 +99,8 @@ export const createReplyToUserEffectInitializer = (
           }
         };
 
-        // 调用流式 LLM，使用 'reply-to-user' scene
-        await streamLLM(
-          "reply-to-user",
+        // 调用流式 LLM（speak）：向用户解释说明
+        await speak(
           systemPrompts,
           Array.from(relatedHistoryMessages),
           handleChunk,

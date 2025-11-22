@@ -17,7 +17,7 @@ export const createActionRequestEffectInitializer = (
 ): EffectInitializer =>
   createEffectInitializer(
     async (dispatch: Dispatch, isCancelled: () => boolean) => {
-      const { callAction } = options;
+      const { act } = options;
       const { actionRequestId } = effect;
 
       // 从 state 获取 action request
@@ -40,7 +40,7 @@ export const createActionRequestEffectInitializer = (
       }
 
       // 调用 action
-      const result = await callAction(request.actionName, parameters);
+      const result = await act(request.actionName, parameters);
 
       if (isCancelled()) return; // 如果被取消，直接返回
 

@@ -16,7 +16,7 @@ export const createRefineActionCallEffectInitializer = (
   key: string,
   options: RunEffectOptions,
 ): EffectInitializer => {
-  const { invokeLLM, getActionParameterSchema } = options;
+  const { think, getActionParameterSchema } = options;
   
   return createEffectInitializer(
     async (dispatch: Dispatch, isCancelled: () => boolean) => {
@@ -44,6 +44,14 @@ export const createRefineActionCallEffectInitializer = (
         // 从 state 获取 systemPrompts
         const baseSystemPrompts = state.systemPrompts;
 
+        // 解析 parameter schema 为 JSON Schema 对象
+        let outputSchema: Record<string, unknown>;
+        try {
+          outputSchema = JSON.parse(parameterSchema);
+        } catch {
+          throw new Error(`Invalid parameter schema JSON for actionName: ${request.actionName}`);
+        }
+
         // 构建包含 action 信息的 system prompts
         // 将 parameter schema 和 intention 添加到 system prompts 中，以便 LLM 生成符合 schema 的 parameters
         const enhancedSystemPrompts = `${baseSystemPrompts}
@@ -61,9 +69,8 @@ Please generate parameters that conform to the provided JSON Schema based on the
         // 从 state 获取历史消息窗口
         const messageWindow = Array.from(state.historyMessages);
 
-        // 使用 'refine-action' scene 调用 LLM，传入 intention、parameter schema 和历史消息
-        // LLM 需要根据 intention、schema 和历史消息生成符合 schema 的 parameters
-        const result = await invokeLLM("refine-action", enhancedSystemPrompts, messageWindow, []);
+        // 调用 LLM（think）：根据 intention、schema 和历史消息生成符合 schema 的 parameters
+        const result = await think(enhancedSystemPrompts, messageWindow, outputSchema);
 
         if (isCancelled()) {
           return;

@@ -11,11 +11,6 @@ export type EffectInitializer = {
 };
 
 /**
- * LLM 调用场景类型
- */
-export type LLMScene = "reaction" | "refine-action" | "reply-to-user";
-
-/**
  * LLM 工具函数定义
  */
 export type LLMTool = {
@@ -28,30 +23,29 @@ export type LLMTool = {
 };
 
 /**
- * 非流式调用大模型函数类型
- * 返回结构化的决策结果（根据不同的 Effect 类型，返回不同的结果）
+ * 非流式调用大模型函数类型（think）
+ * 用于让 LLM 思考特定问题，返回符合指定 schema 的 JSON 字符串
  */
-export type InvokeLLMFn = (
-  scene: LLMScene,
+export type ThinkFn = (
   systemPrompts: string,
   messageWindow: HistoryMessage[],
-  tools: LLMTool[], // 工具函数列表（必选，没有时传空数组）
-) => Promise<string>; // 返回 JSON 字符串
+  outputSchema: Record<string, unknown>, // JSON Schema，限定输出格式
+) => Promise<string>; // 返回符合 outputSchema 的 JSON 字符串
 
 /**
- * 流式调用大模型函数类型
+ * 流式调用大模型函数类型（speak）
+ * 用于让 LLM 解释说明，不限回答格式，返回 chunk 流
  */
-export type StreamLLMFn = (
-  scene: LLMScene,
+export type SpeakFn = (
   systemPrompts: string,
   messageWindow: HistoryMessage[],
   onChunk: (chunk: string) => void,
 ) => Promise<void>;
 
 /**
- * 调用 Action 函数类型
+ * 调用 Action 函数类型（act）
  */
-export type CallActionFn = (
+export type ActFn = (
   actionName: string,
   parameters: string, // JSON 字符串
 ) => Promise<string>; // 返回结果字符串
@@ -84,9 +78,9 @@ export type GetSystemPromptsFn = () => string;
  * RunEffect 选项
  */
 export type RunEffectOptions = {
-  invokeLLM: InvokeLLMFn;
-  streamLLM: StreamLLMFn;
-  callAction: CallActionFn;
+  think: ThinkFn;
+  speak: SpeakFn;
+  act: ActFn;
   getActionParameterSchema: GetActionParameterSchemaFn; // 用于获取 action parameter schema
   getSystemPrompts: GetSystemPromptsFn; // 用于获取 system prompts
   sendUserMessageChunk: SendUserMessageChunkFn;
