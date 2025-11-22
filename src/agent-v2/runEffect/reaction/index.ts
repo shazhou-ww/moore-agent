@@ -1,4 +1,5 @@
 import { v4 } from "uuid";
+import { partition } from "lodash";
 import type { Immutable } from "mutative";
 import type { AgentState, HistoryMessage } from "../../agentState.ts";
 import type { ReactionEffect } from "../../agentEffects.ts";
@@ -12,39 +13,153 @@ import { toJSONSchema } from "zod";
 import { buildSystemPrompt } from "./prompt.ts";
 import {
   collectUnrespondedItems,
-  calculateMessageRounds,
-  getRecentMessageRounds,
-  buildActionSummary,
+  type ReactionContext,
 } from "./utils.ts";
 
 /**
- * 解析 LLM 返回的迭代决策结果
+ * 检查是否有新输入，如果没有则返回 noop 决策
  */
-const parseDecideFunctionCall = (result: string): IterationDecision => {
-  try {
-    // 尝试解析为直接的函数调用结果
-    const parsed = JSON.parse(result);
-    if (parsed.type) {
-      // 验证并解析
-      return iterationDecisionSchema.parse(parsed);
-    } else if (parsed.tool_calls && parsed.tool_calls.length > 0) {
-      // 如果是工具调用格式，提取第一个工具调用的参数
-      const toolCall = parsed.tool_calls[0];
-      if (toolCall.function?.name === "decide") {
-        const args = typeof toolCall.function.arguments === "string"
-          ? JSON.parse(toolCall.function.arguments)
-          : toolCall.function.arguments;
-        return iterationDecisionSchema.parse(args);
-      }
-    }
-    throw new Error(`Failed to parse iteration decision: missing type or tool_calls in response: ${result}`);
-  } catch (error) {
-    // 如果解析失败，直接抛出错误
-    if (error instanceof Error) {
-      throw new Error(`Failed to parse iteration decision from LLM response: ${error.message}. Response: ${result}`);
-    }
-    throw new Error(`Failed to parse iteration decision from LLM response: ${String(error)}. Response: ${result}`);
+const checkAndHandleNoopDecision = (
+  reactionContext: ReactionContext,
+  dispatch: Dispatch,
+): boolean => {
+  if (reactionContext.unrespondedUserMessages.length === 0 && reactionContext.unrespondedActionIds.length === 0) {
+    const signal: ReactionCompleteSignal = {
+      kind: "reaction-complete",
+      messageId: v4(),
+      decision: { type: "noop" },
+      timestamp: now(),
+    };
+    dispatch(signal as Immutable<AgentSignal>);
+    return true;
   }
+  return false;
+};
+
+/**
+ * 构建消息窗口
+ * 1. 上次 reaction 之后的所有消息（both user/assistant messages）
+ * 2. prepend 上上次 reaction 之前的 currentHistoryRounds 轮消息
+ */
+const buildMessageWindow = (
+  state: Immutable<AgentState>,
+  lastReactionTimestamp: number,
+  currentHistoryRounds: number,
+): HistoryMessage[] => {
+  const allMessages = state.historyMessages;
+  
+  // Partition: 分割为 lastReactionTimestamp 之前和之后的消息
+  const [messagesBefore, messagesAfter] = partition(
+    allMessages,
+    (msg: HistoryMessage) => msg.timestamp <= lastReactionTimestamp,
+  );
+  
+  // 从之前的部分截取最后一段
+  const prependedMessages = messagesBefore.slice(-currentHistoryRounds);
+  
+  // 合并：先放历史消息，再放新消息
+  return [...prependedMessages, ...messagesAfter];
+};
+
+/**
+ * 准备系统提示词和消息窗口
+ */
+const prepareIterationContext = (
+  state: Immutable<AgentState>,
+  lastReactionTimestamp: number,
+  iterationState: IterationState,
+): {
+  systemPrompt: string;
+  messageWindow: HistoryMessage[];
+} => {
+  // 构建消息窗口
+  const messageWindow = buildMessageWindow(
+    state,
+    lastReactionTimestamp,
+    iterationState.currentHistoryRounds,
+  );
+
+  // 构建系统提示词
+  const systemPrompt = buildSystemPrompt(state, iterationState);
+
+  return { systemPrompt, messageWindow };
+};
+
+const iterationDecisionOutputSchema = toJSONSchema(iterationDecisionSchema);
+/**
+ * 调用 think 进行一轮决策
+ */
+const performIterationDecision = async (
+  systemPrompt: string,
+  messageWindow: HistoryMessage[],
+  think: (systemPrompts: string, messageWindow: HistoryMessage[], outputSchema: Record<string, unknown>) => Promise<string>,
+): Promise<IterationDecision> => {
+  // 调用 LLM（think）：思考下一步决策
+  const result = await think(
+    systemPrompt,
+    messageWindow,
+    iterationDecisionOutputSchema,
+  );
+
+  // 解析 LLM 返回的结果
+  const parsed = JSON.parse(result);
+  return iterationDecisionSchema.parse(parsed);
+};
+
+/**
+ * 迭代状态
+ */
+export type IterationState = {
+  currentHistoryRounds: number;
+  loadedActionDetailIds: Set<string>;
+  decision: ReactionDecision | null;
+};
+
+/**
+ * 处理决策结果，决定是否继续迭代
+ */
+const handleIterationDecision = (
+  decideCall: IterationDecision,
+  iterationState: IterationState,
+  additionalHistoryRounds: number,
+): IterationState => {
+  if (decideCall.type === "decision-made") {
+    return {
+      ...iterationState,
+      decision: decideCall.decision,
+    };
+  } else if (decideCall.type === "more-history") {
+    // 追溯更多历史消息
+    return {
+      ...iterationState,
+      currentHistoryRounds: iterationState.currentHistoryRounds + additionalHistoryRounds,
+    };
+  } else if (decideCall.type === "action-detail") {
+    // 补充 action 详情
+    return {
+      ...iterationState,
+      loadedActionDetailIds: new Set([...iterationState.loadedActionDetailIds, ...decideCall.ids]),
+    };
+  }
+
+  // 不应该到达这里
+  throw new Error(`Unknown iteration decision type: ${(decideCall as { type: string }).type}`);
+};
+
+/**
+ * 发送决策结果信号
+ */
+const dispatchReactionComplete = (
+  decision: ReactionDecision,
+  dispatch: Dispatch,
+): void => {
+  const signal: ReactionCompleteSignal = {
+    kind: "reaction-complete",
+    messageId: v4(),
+    decision,
+    timestamp: now(),
+  };
+  dispatch(signal as Immutable<AgentSignal>);
 };
 
 /**
@@ -57,137 +172,64 @@ export const createReactionEffectInitializer = (
   options: RunEffectOptions,
 ): EffectInitializer => {
   const {
-    think,
-    getSystemPrompts,
-    actions,
-    reactionInitialHistoryRounds,
-    reactionAdditionalHistoryRounds,
+    behavior: { think },
+    options: {
+      reaction: { initialHistoryRounds, additionalHistoryRounds },
+    },
   } = options;
 
   return createEffectInitializer(
     async (dispatch: Dispatch, isCancelled: () => boolean) => {
-      if (isCancelled()) {
-        return;
-      }
-
-      const baseSystemPrompts = getSystemPrompts();
       const lastReactionTimestamp = state.lastReactionTimestamp;
 
       // 收集尚未响应的消息和 action responses
-      const { unrespondedUserMessages, unrespondedActionIds } = collectUnrespondedItems(
+      const reactionContext: ReactionContext = collectUnrespondedItems(
         state,
         lastReactionTimestamp,
       );
 
       // 如果没有新的输入，直接返回 noop 决策
-      if (unrespondedUserMessages.length === 0 && unrespondedActionIds.length === 0) {
-        const signal: ReactionCompleteSignal = {
-          kind: "reaction-complete",
-          messageId: v4(),
-          decision: { type: "noop" },
-          timestamp: now(),
-        };
-        dispatch(signal as Immutable<AgentSignal>);
+      if (checkAndHandleNoopDecision(reactionContext, dispatch)) {
         return;
       }
 
-      // 初始化状态
-      let currentHistoryRounds = reactionInitialHistoryRounds;
-      let loadedActionDetailIds = new Set<string>(unrespondedActionIds); // 初始加载未响应的 action 详情
-      let decision: ReactionDecision | null = null;
+      // 初始化迭代状态
+      let iterationState: IterationState = {
+        currentHistoryRounds: initialHistoryRounds,
+        loadedActionDetailIds: new Set<string>(reactionContext.unrespondedActionIds), // 初始加载未响应的 action 详情
+        decision: null,
+      };
 
       // 循环决策，直到做出最终决策
-      while (true) {
-        if (isCancelled()) {
-          return;
-        }
-
-        // 计算总的消息轮次
-        const totalRounds = calculateMessageRounds(state.historyMessages);
-
-        // 获取最近 n 轮的消息
-        const recentMessages = getRecentMessageRounds(
-          state.historyMessages,
-          currentHistoryRounds,
+      while (iterationState.decision === null) {
+        // 1. 准备系统提示词和消息窗口
+        const { systemPrompt, messageWindow } = prepareIterationContext(
+          state,
+          lastReactionTimestamp,
+          iterationState,
         );
 
-        // 合并未响应的消息和最近的历史消息
-        const messageWindow: HistoryMessage[] = [];
-        
-        // 先添加历史消息（排除未响应的消息，避免重复）
-        const unrespondedMessageIds = new Set(unrespondedUserMessages.map((m) => m.id));
-        for (const msg of recentMessages) {
-          if (!unrespondedMessageIds.has(msg.id)) {
-            messageWindow.push({ ...msg });
-          }
-        }
-        
-        // 然后添加未响应的消息
-        for (const msg of unrespondedUserMessages) {
-          messageWindow.push({ ...msg });
-        }
-
-        // 构建 action 摘要
-        const actionSummaries = buildActionSummary(state, loadedActionDetailIds);
-
-        // 构建系统提示词
-        const systemPrompt = buildSystemPrompt(
-          baseSystemPrompts,
-          actions,
-          actionSummaries,
-          currentHistoryRounds,
-          totalRounds,
-        );
-
-        // 调用 LLM（think）：思考下一步决策
-        const decideOutputSchema = toJSONSchema(iterationDecisionSchema);
-        const result = await think(
+        // 2. 调用 think，进行一轮决策
+        const decideCall = await performIterationDecision(
           systemPrompt,
           messageWindow,
-          decideOutputSchema,
+          think,
         );
 
         if (isCancelled()) {
           return;
         }
 
-        // 解析 LLM 返回的结果
-        const decideCall = parseDecideFunctionCall(result);
-
-        // 处理决策
-        if (decideCall.type === "decision-made") {
-          decision = decideCall.decision;
-          break;
-        } else if (decideCall.type === "more-history") {
-          // 追溯更多历史消息
-          currentHistoryRounds += reactionAdditionalHistoryRounds;
-          // 继续循环
-        } else if (decideCall.type === "action-detail") {
-          // 补充 action 详情
-          for (const id of decideCall.ids) {
-            loadedActionDetailIds.add(id);
-          }
-          // 继续循环
-        }
-      }
-
-      if (!decision) {
-        throw new Error("Decision loop ended without a decision");
-      }
-
-      if (isCancelled()) {
-        return;
+        // 3. 根据决策结果，更新迭代状态
+        iterationState = handleIterationDecision(
+          decideCall,
+          iterationState,
+          additionalHistoryRounds,
+        );
       }
 
       // 发送决策结果
-      const signal: ReactionCompleteSignal = {
-        kind: "reaction-complete",
-        messageId: v4(),
-        decision,
-        timestamp: now(),
-      };
-
-      dispatch(signal as Immutable<AgentSignal>);
+      dispatchReactionComplete(iterationState.decision, dispatch);
     },
   );
 };

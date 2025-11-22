@@ -1,33 +1,59 @@
+import type { Immutable } from "mutative";
+import type { AgentState } from "../../agentState.ts";
+import { calculateMessageRounds } from "./utils.ts";
+import type { IterationState } from "./index.ts";
+
 /**
  * 构建系统提示词
  */
 export const buildSystemPrompt = (
-  baseSystemPrompts: string,
-  availableActions: Record<string, string>,
-  actionSummaries: Array<{
-    id: string;
-    name: string;
-    intention: string;
-    status: "pending" | "completed" | "cancelled";
-    request?: string;
-    response?: string;
-  }>,
-  messageRounds: number,
-  totalRounds: number,
+  state: Immutable<AgentState>,
+  iterationState: IterationState,
 ): string => {
+  // 从 state 中提取 actions descriptions
+  const availableActions = Object.fromEntries(
+    Object.entries(state.actions).map(([name, def]) => [name, def.description]),
+  );
+
+  // 计算总的消息轮次
+  const totalRounds = calculateMessageRounds(state.historyMessages);
+  const messageRounds = iterationState.currentHistoryRounds;
+
   const actionsList = Object.entries(availableActions)
     .map(([name, description]) => `- ${name}: ${description}`)
     .join("\n");
 
-  const actionSummariesText = actionSummaries
-    .map((summary) => {
-      let text = `- ID: ${summary.id}, Name: ${summary.name}, Intention: ${summary.intention}, Status: ${summary.status}`;
-      if (summary.request) {
-        text += `\n  Request: ${summary.request}`;
+  // 直接根据 state 和 loadedActionDetailIds 渲染 action summaries
+  const actionSummariesText = Object.entries(state.actionRequests)
+    .map(([actionRequestId, request]) => {
+      const response = state.actionResponses[actionRequestId];
+      const parameters = state.actionParameters[actionRequestId];
+      
+      let status: "pending" | "completed" | "cancelled" = "pending";
+      if (response) {
+        status = response.type === "cancelled" ? "cancelled" : "completed";
       }
-      if (summary.response) {
-        text += `\n  Response: ${summary.response}`;
+
+      let text = `- ID: ${actionRequestId}, Name: ${request.actionName}, Intention: ${request.intention}, Status: ${status}`;
+      
+      // 如果需要详情，添加 request 和 response
+      if (iterationState.loadedActionDetailIds.has(actionRequestId)) {
+        const requestDetail = JSON.stringify({
+          actionName: request.actionName,
+          intention: request.intention,
+          parameters: parameters ? JSON.parse(parameters) : undefined,
+        });
+        text += `\n  Request: ${requestDetail}`;
+        
+        if (response) {
+          const responseDetail = JSON.stringify({
+            type: response.type,
+            ...(response.type === "completed" ? { result: response.result } : {}),
+          });
+          text += `\n  Response: ${responseDetail}`;
+        }
       }
+      
       return text;
     })
     .join("\n");
@@ -44,7 +70,7 @@ export const buildSystemPrompt = (
 ${actionsList}
 
 ### 已发起的 Actions：
-${actionSummaries.length > 0 ? actionSummariesText : "（无）"}
+${actionSummariesText || "（无）"}
 ${historyInfo}
 
 ### 决策选项：
@@ -60,7 +86,7 @@ ${historyInfo}
 
 ## 主线任务的系统提示词
 ================================================================================
-${baseSystemPrompts}
+${state.systemPrompts}
 ================================================================================
 `;
 };

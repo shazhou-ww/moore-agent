@@ -8,6 +8,102 @@ import { createEffectInitializer } from "./effectInitializer.ts";
 import { now } from "../../utils/time.ts";
 
 /**
+ * 获取并验证 action request 和 parameter schema
+ */
+const getActionRequestAndSchema = (
+  state: Immutable<AgentState>,
+  actionRequestId: string,
+): {
+  request: { actionName: string; intention: string };
+  parameterSchema: string;
+  outputSchema: Record<string, unknown>;
+} => {
+  // 从 state 获取 action request
+  const request = state.actionRequests[actionRequestId];
+  if (!request) {
+    throw new Error(`Action request not found for actionRequestId: ${actionRequestId}`);
+  }
+
+  // 从 state.actions 中获取 action 的 parameter schema
+  const actionDef = state.actions[request.actionName];
+  if (!actionDef) {
+    throw new Error(`Action definition not found for actionName: ${request.actionName}`);
+  }
+
+  const parameterSchema = actionDef.schema;
+
+  // 解析 parameter schema 为 JSON Schema 对象
+  let outputSchema: Record<string, unknown>;
+  try {
+    outputSchema = JSON.parse(parameterSchema);
+  } catch {
+    throw new Error(`Invalid parameter schema JSON for actionName: ${request.actionName}`);
+  }
+
+  return { request, parameterSchema, outputSchema };
+};
+
+/**
+ * 构建增强的系统提示词
+ */
+const buildEnhancedSystemPrompts = (
+  baseSystemPrompts: string,
+  actionName: string,
+  intention: string,
+  parameterSchema: string,
+): string => {
+  return `${baseSystemPrompts}
+
+## Action Parameter Refinement Task
+You need to generate parameters for the following action:
+
+**Action Name:** ${actionName}
+**Intention:** ${intention}
+**Parameter Schema (JSON Schema):**
+${parameterSchema}
+
+Please generate parameters that conform to the provided JSON Schema based on the intention and conversation history. Return the parameters as a valid JSON object that matches the schema.`;
+};
+
+/**
+ * 解析 LLM 返回的参数
+ */
+const parseRefinedParameters = (result: string): string => {
+  try {
+    const parsed = JSON.parse(result);
+    // 如果返回的是对象，提取 parameters 字段
+    if (typeof parsed === "object" && parsed !== null && "parameters" in parsed) {
+      return typeof parsed.parameters === "string"
+        ? parsed.parameters
+        : JSON.stringify(parsed.parameters);
+    } else {
+      // 否则认为整个结果就是 parameters
+      return typeof parsed === "string" ? parsed : JSON.stringify(parsed);
+    }
+  } catch {
+    // 如果解析失败，直接使用原始结果
+    return result;
+  }
+};
+
+/**
+ * 发送 action request refined 信号
+ */
+const dispatchActionRequestRefined = (
+  actionRequestId: string,
+  parameters: string,
+  dispatch: Dispatch,
+): void => {
+  const signal: ActionRequestRefinedSignal = {
+    kind: "action-request-refined",
+    actionRequestId,
+    parameters,
+    timestamp: now(),
+  };
+  dispatch(signal as Immutable<AgentSignal>);
+};
+
+/**
  * 创建 RefineActionCallEffect 的初始器
  */
 export const createRefineActionCallEffectInitializer = (
@@ -16,93 +112,44 @@ export const createRefineActionCallEffectInitializer = (
   key: string,
   options: RunEffectOptions,
 ): EffectInitializer => {
-  const { think, getActionParameterSchema } = options;
+  const {
+    behavior: { think },
+  } = options;
   
   return createEffectInitializer(
     async (dispatch: Dispatch, isCancelled: () => boolean) => {
-      // actionRequestId 从 effect 中获取
       const actionRequestId = effect.actionRequestId;
-      if (isCancelled()) {
-        return;
-      }
 
-      // 从 state 获取 action request
-      const request = state.actionRequests[actionRequestId];
-      if (!request) {
-        throw new Error(`Action request not found for actionRequestId: ${actionRequestId}`);
-      }
+      // 获取并验证 action request 和 schema
+      const { request, parameterSchema, outputSchema } = getActionRequestAndSchema(
+        state,
+        actionRequestId,
+      );
 
-      // 获取 action 的 parameter schema
-      const parameterSchema = getActionParameterSchema(request.actionName);
-      if (!parameterSchema) {
-        throw new Error(
-          `Action parameter schema not found for actionName: ${request.actionName}`,
-        );
-      }
-
-      // 从 state 获取 systemPrompts
-      const baseSystemPrompts = state.systemPrompts;
-
-      // 解析 parameter schema 为 JSON Schema 对象
-      let outputSchema: Record<string, unknown>;
-      try {
-        outputSchema = JSON.parse(parameterSchema);
-      } catch {
-        throw new Error(`Invalid parameter schema JSON for actionName: ${request.actionName}`);
-      }
-
-      // 构建包含 action 信息的 system prompts
-      // 将 parameter schema 和 intention 添加到 system prompts 中，以便 LLM 生成符合 schema 的 parameters
-      const enhancedSystemPrompts = `${baseSystemPrompts}
-
-## Action Parameter Refinement Task
-You need to generate parameters for the following action:
-
-**Action Name:** ${request.actionName}
-**Intention:** ${request.intention}
-**Parameter Schema (JSON Schema):**
-${parameterSchema}
-
-Please generate parameters that conform to the provided JSON Schema based on the intention and conversation history. Return the parameters as a valid JSON object that matches the schema.`;
-
-      // 从 state 获取历史消息窗口
-      const messageWindow = Array.from(state.historyMessages);
+      // 构建增强的系统提示词
+      const enhancedSystemPrompts = buildEnhancedSystemPrompts(
+        state.systemPrompts,
+        request.actionName,
+        request.intention,
+        parameterSchema,
+      );
 
       // 调用 LLM（think）：根据 intention、schema 和历史消息生成符合 schema 的 parameters
-      const result = await think(enhancedSystemPrompts, messageWindow, outputSchema);
+      const result = await think(
+        enhancedSystemPrompts,
+        Array.from(state.historyMessages),
+        outputSchema,
+      );
 
       if (isCancelled()) {
         return;
       }
 
-      // 解析 LLM 返回的参数（JSON 字符串）
-      // 预期格式：{ parameters: string } 或直接是 JSON 字符串
-      let parameters: string;
-      try {
-        const parsed = JSON.parse(result);
-        // 如果返回的是对象，提取 parameters 字段
-        if (typeof parsed === "object" && parsed !== null && "parameters" in parsed) {
-          parameters =
-            typeof parsed.parameters === "string"
-              ? parsed.parameters
-              : JSON.stringify(parsed.parameters);
-        } else {
-          // 否则认为整个结果就是 parameters
-          parameters = typeof parsed === "string" ? parsed : JSON.stringify(parsed);
-        }
-      } catch {
-        // 如果解析失败，直接使用原始结果
-        parameters = result;
-      }
+      // 解析 LLM 返回的参数
+      const parameters = parseRefinedParameters(result);
 
-      const signal: ActionRequestRefinedSignal = {
-        kind: "action-request-refined",
-        actionRequestId,
-        parameters,
-        timestamp: now(),
-      };
-
-      dispatch(signal as Immutable<AgentSignal>);
+      // 发送 refined 信号
+      dispatchActionRequestRefined(actionRequestId, parameters, dispatch);
     },
   );
 };

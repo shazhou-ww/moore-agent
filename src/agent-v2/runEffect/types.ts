@@ -50,14 +50,6 @@ export type ActFn = (
 ) => Promise<string>; // 返回结果字符串
 
 /**
- * 获取 Action Parameter Schema 函数类型
- * 用于从 state 中获取对应 actionName 的 parameter schema（JSON Schema 字符串）
- */
-export type GetActionParameterSchemaFn = (
-  actionName: string,
-) => string | undefined; // 返回 JSON Schema 字符串或 undefined
-
-/**
  * 发送用户消息块函数类型
  */
 export type SendUserMessageChunkFn = (messageId: string, chunk: string) => void;
@@ -68,26 +60,24 @@ export type SendUserMessageChunkFn = (messageId: string, chunk: string) => void;
 export type CompleteUserMessageFn = (messageId: string) => void;
 
 /**
- * 获取 System Prompts 函数类型
- * 用于从 state 或其他地方获取 system prompts
- */
-export type GetSystemPromptsFn = () => string;
-
-/**
  * RunEffect 选项
  */
 export type RunEffectOptions = {
-  think: ThinkFn;
-  speak: SpeakFn;
-  act: ActFn;
-  getActionParameterSchema: GetActionParameterSchemaFn; // 用于获取 action parameter schema
-  getSystemPrompts: GetSystemPromptsFn; // 用于获取 system prompts
-  sendUserMessageChunk: SendUserMessageChunkFn;
-  completeUserMessage: CompleteUserMessageFn;
-  // Reaction 相关配置
-  actions: Record<string, string>; // Record<actionName, description> - 所有可用的 action 类型
-  reactionInitialHistoryRounds: number; // 初始的上下文消息轮次 n
-  reactionAdditionalHistoryRounds: number; // 每次追加的消息轮次 m
+  behavior: {
+    think: ThinkFn;
+    speak: SpeakFn;
+    act: ActFn;
+  };
+  message: {
+    sendChunk: SendUserMessageChunkFn;
+    complete: CompleteUserMessageFn;
+  };
+  options: {
+    reaction: {
+      initialHistoryRounds: number; // 初始的上下文消息轮次 n
+      additionalHistoryRounds: number; // 每次追加的消息轮次 m
+    };
+  };
 };
 
 /**

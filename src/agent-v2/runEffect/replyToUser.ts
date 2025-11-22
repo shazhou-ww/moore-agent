@@ -62,7 +62,7 @@ const createChunkProcessor = (
   const CHUNK_QUEUE_SIZE_THRESHOLD = 100; // chunk 合并阈值
 
   const flush = () => {
-    if (chunkQueue.length > 0 && !isCancelled()) {
+    if (chunkQueue.length > 0) {
       const mergedChunk = chunkQueue.join("");
       // 调用 sendUserMessageChunk 回调
       sendUserMessageChunk(messageId, mergedChunk);
@@ -103,12 +103,12 @@ const processChunks = async (
   isCancelled: () => boolean,
 ): Promise<void> => {
   while (true) {
-    if (isCancelled()) {
-      return;
-    }
     const { done, value } = await chunkIterator.next();
     if (done) {
       break;
+    }
+    if (isCancelled()) {
+      return;
     }
     chunkProcessor.addChunk(value);
   }
@@ -143,14 +143,14 @@ export const createReplyToUserEffectInitializer = (
   key: string,
   options: RunEffectOptions,
 ): EffectInitializer => {
-  const { speak, sendUserMessageChunk, completeUserMessage } = options;
+  const {
+    behavior: { speak },
+    message: { sendChunk: sendUserMessageChunk, complete: completeUserMessage },
+  } = options;
   
   return createEffectInitializer(
     async (dispatch: Dispatch, isCancelled: () => boolean) => {
       const messageId = effect.messageId;
-      if (isCancelled()) {
-        return;
-      }
 
       // 验证 reply context
       const replyContext = state.replies[messageId];
