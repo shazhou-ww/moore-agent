@@ -2,7 +2,7 @@ import { v4 } from "uuid";
 import type { Immutable } from "mutative";
 import type { AgentState } from "../agentState.ts";
 import type { ReactionEffect } from "../agentEffects.ts";
-import type { AgentSignal, ReactionCompleteSignal } from "../agentSignal.ts";
+import type { AgentSignal, ReactionCompleteSignal, ReactionDecision } from "../agentSignal.ts";
 import type { EffectInitializer, RunEffectOptions } from "./types.ts";
 import type { Dispatch } from "./effectInitializer.ts";
 import { createEffectInitializer } from "./effectInitializer.ts";
@@ -46,7 +46,7 @@ export const createReactionEffectInitializer = (
 
         // 解析 LLM 返回的决策结果
         // 预期格式：{ type: "reply-to-user" | "adjust-actions" | "noop", ... }
-        const decision = parseJSONResponse<ReactionCompleteSignal["decision"]>(
+        const decision = parseJSONResponse<ReactionDecision>(
           result,
           "ReactionEffect",
         );

@@ -60,6 +60,48 @@ export const assistantMessageCompleteSignalSchema = z.object({
 });
 
 /**
+ * Reply To User Decision Schema - 回复用户的决策
+ * 包含相关的 history message ids 和 action ids
+ */
+export const replyToUserDecisionSchema = z.object({
+  type: z.literal("reply-to-user"),
+  lastHistoryMessageId: z.string(), // 最后一条相关的 history message id
+  relatedActionIds: z.array(z.string()), // 相关的 action request ids（已排序）
+});
+
+/**
+ * Adjust Actions Decision Schema - 调整 actions 的决策
+ * 取消哪些、新开哪些
+ */
+export const adjustActionsDecisionSchema = z.object({
+  type: z.literal("adjust-actions"),
+  cancelActions: z.array(z.string()), // actionRequestIds 需要取消的
+  newActions: z.array(z.object({
+    actionRequestId: z.string(), // action request id
+    actionName: z.string(),
+    initialIntent: z.string(), // 初始意图，用于后续 RefineActionCallEffect
+  })),
+});
+
+/**
+ * Noop Decision Schema - 无需操作的决策
+ * 什么都不需要调整
+ */
+export const noopDecisionSchema = z.object({
+  type: z.literal("noop"),
+});
+
+/**
+ * Reaction Decision Schema - Reaction 的决策结果
+ * 分成三个互斥类型
+ */
+export const reactionDecisionSchema = z.discriminatedUnion("type", [
+  replyToUserDecisionSchema,
+  adjustActionsDecisionSchema,
+  noopDecisionSchema,
+]);
+
+/**
  * Reaction Complete Signal Schema - Reaction Effect 完成
  * Reaction 是基于最近的输入（user message 或 action responses）让 LLM 做下一步动作的规划
  * Reaction 是 non-streaming 的，直接返回决策结果
@@ -67,29 +109,7 @@ export const assistantMessageCompleteSignalSchema = z.object({
 export const reactionCompleteSignalSchema = z.object({
   kind: z.literal("reaction-complete"),
   messageId: z.string(), // 关联到 ReactionEffect 的 messageId
-  // 决策结果：分成三个互斥类型
-  decision: z.discriminatedUnion("type", [
-    // 回复用户：包含相关的 history message ids 和 action ids
-    z.object({
-      type: z.literal("reply-to-user"),
-      lastHistoryMessageId: z.string(), // 最后一条相关的 history message id
-      relatedActionIds: z.array(z.string()), // 相关的 action request ids（已排序）
-    }),
-    // 调整 actions：取消哪些、新开哪些
-    z.object({
-      type: z.literal("adjust-actions"),
-      cancelActions: z.array(z.string()), // actionRequestIds 需要取消的
-      newActions: z.array(z.object({
-        actionRequestId: z.string(), // action request id
-        actionName: z.string(),
-        initialIntent: z.string(), // 初始意图，用于后续 RefineActionCallEffect
-      })),
-    }),
-    // 无需操作：什么都不需要调整
-    z.object({
-      type: z.literal("noop"),
-    }),
-  ]),
+  decision: reactionDecisionSchema,
   timestamp: z.number(),
 });
 
@@ -158,28 +178,24 @@ export type ReactionCompleteSignal = z.infer<
 >;
 
 /**
+ * Reaction Decision - Reaction 的决策结果
+ */
+export type ReactionDecision = z.infer<typeof reactionDecisionSchema>;
+
+/**
  * Reply To User Decision - 回复用户的决策
  */
-export type ReplyToUserDecision = Extract<
-  ReactionCompleteSignal["decision"],
-  { type: "reply-to-user" }
->;
+export type ReplyToUserDecision = z.infer<typeof replyToUserDecisionSchema>;
 
 /**
  * Adjust Actions Decision - 调整 actions 的决策
  */
-export type AdjustActionsDecision = Extract<
-  ReactionCompleteSignal["decision"],
-  { type: "adjust-actions" }
->;
+export type AdjustActionsDecision = z.infer<typeof adjustActionsDecisionSchema>;
 
 /**
  * Noop Decision - 无需操作的决策
  */
-export type NoopDecision = Extract<
-  ReactionCompleteSignal["decision"],
-  { type: "noop" }
->;
+export type NoopDecision = z.infer<typeof noopDecisionSchema>;
 
 /**
  * AgentSignal - Agent 接收到的信号
