@@ -27,7 +27,7 @@ export type LLMTool = {
  * 用于让 LLM 思考特定问题，返回符合指定 schema 的 JSON 字符串
  */
 export type ThinkFn = (
-  systemPrompts: string,
+  getSystemPrompts: (funcName: string) => string,
   messageWindow: HistoryMessage[],
   outputSchema: Record<string, unknown>, // JSON Schema，限定输出格式
 ) => Promise<string>; // 返回符合 outputSchema 的 JSON 字符串

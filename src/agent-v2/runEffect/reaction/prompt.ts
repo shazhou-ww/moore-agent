@@ -3,11 +3,11 @@ import type { AgentState, ActionResponse } from "../../agentState.ts";
 import type { IterationState } from "./index.ts";
 
 /**
- * Format JSON object as a function call in a code block
+ * Format JSON object in a code block (只包含 JSON，不包含函数调用)
  */
-const codeBlockJson = (obj: unknown, functionName: string = "decide"): string => {
+const codeBlockJson = (obj: unknown): string => {
   const jsonString = JSON.stringify(obj, null, 2);
-  return `\`\`\`json\n${functionName}(${jsonString})\n\`\`\``;
+  return `\`\`\`json\n${jsonString}\n\`\`\``;
 };
 
 /**
@@ -99,20 +99,21 @@ const buildActionSummariesText = (
 const buildHistoryInfo = (
   totalMessages: number,
   currentMessages: number,
+  funcName: string,
 ): string => {
   if (totalMessages <= currentMessages) {
     return "";
   }
-  return `\nNote: Currently showing only the last ${currentMessages} messages, with ${totalMessages - currentMessages} messages not loaded. If you need more history messages, you can call the decide function with { type: "more-history" }.`;
+  return `\nNote: Currently showing only the last ${currentMessages} messages, with ${totalMessages - currentMessages} messages not loaded. If you need more history messages, you can call the ${funcName} function with { type: "more-history" }.`;
 };
 
 /**
- * Build system prompt
+ * Build system prompt（柯里化最后一个参数）
  */
 export const buildSystemPrompt = (
   state: Immutable<AgentState>,
   iterationState: IterationState,
-): string => {
+) => (funcName: string): string => {
   const availableActions = extractAvailableActions(state);
   const actionsList = buildActionsList(availableActions);
   const actionSummariesText = buildActionSummariesText(
@@ -122,7 +123,7 @@ export const buildSystemPrompt = (
 
   const totalMessages = state.historyMessages.length;
   const currentMessages = iterationState.currentHistoryCount;
-  const historyInfo = buildHistoryInfo(totalMessages, currentMessages);
+  const historyInfo = buildHistoryInfo(totalMessages, currentMessages, funcName);
 
   return `## Reaction Decision Task
 
@@ -142,7 +143,7 @@ ${historyInfo}
    - **Cancel actions**: Cancel running actions that are no longer needed based on the current context
    - **Add actions**: Create new actions that are needed to supplement the current task based on context analysis
 
-Please call the decide function to make a decision. Examples:
+Please call the ${funcName} function to make a decision. Examples:
 
 **To get more information:**
 
@@ -198,7 +199,7 @@ ${codeBlockJson({
 
 ---
 
-## Main Task System Prompt
+## Main Task System Prompt (for reference)
 ================================================================================
 ${state.systemPrompts}
 ================================================================================

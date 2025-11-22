@@ -7,7 +7,7 @@ import type {
   ReactionCompleteSignal,
   ReactionDecision,
 } from "../../agentSignal.ts";
-import type { EffectInitializer, RunEffectOptions } from "../types.ts";
+import type { EffectInitializer, RunEffectOptions, ThinkFn } from "../types.ts";
 import type { Dispatch } from "../effectInitializer.ts";
 import { createEffectInitializer } from "../effectInitializer.ts";
 import {
@@ -115,7 +115,7 @@ const prepareIterationContext = (
   state: Immutable<AgentState>,
   iterationState: IterationState,
 ): {
-  systemPrompt: string;
+  getSystemPrompts: (funcName: string) => string;
   messageWindow: HistoryMessage[];
 } => {
   // 构建消息窗口
@@ -124,10 +124,10 @@ const prepareIterationContext = (
     iterationState.currentHistoryCount,
   );
 
-  // 构建系统提示词
-  const systemPrompt = buildSystemPrompt(state, iterationState);
+  // 构建系统提示词函数（柯里化后）
+  const getSystemPrompts = buildSystemPrompt(state, iterationState);
 
-  return { systemPrompt, messageWindow };
+  return { getSystemPrompts, messageWindow };
 };
 
 const iterationDecisionOutputSchema = toJSONSchema(iterationDecisionSchema);
@@ -135,17 +135,13 @@ const iterationDecisionOutputSchema = toJSONSchema(iterationDecisionSchema);
  * 调用 think 进行一轮决策
  */
 const performIterationDecision = async (
-  systemPrompt: string,
+  getSystemPrompts: (funcName: string) => string,
   messageWindow: HistoryMessage[],
-  think: (
-    systemPrompts: string,
-    messageWindow: HistoryMessage[],
-    outputSchema: Record<string, unknown>
-  ) => Promise<string>
+  think: ThinkFn,
 ): Promise<IterationDecision> => {
   // 调用 LLM（think）：思考下一步决策
   const result = await think(
-    systemPrompt,
+    getSystemPrompts,
     messageWindow,
     iterationDecisionOutputSchema
   );
@@ -269,14 +265,14 @@ export const createReactionEffectInitializer = (
       // 循环决策，直到做出最终决策
       while (iterationState.decision === null) {
         // 1. 准备系统提示词和消息窗口
-        const { systemPrompt, messageWindow } = prepareIterationContext(
+        const { getSystemPrompts: getSystemPrompt, messageWindow } = prepareIterationContext(
           state,
           iterationState,
         );
 
         // 2. 调用 think，进行一轮决策
         const decideCall = await performIterationDecision(
-          systemPrompt,
+          getSystemPrompt,
           messageWindow,
           think
         );

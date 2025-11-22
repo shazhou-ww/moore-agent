@@ -8,65 +8,44 @@ import { createEffectInitializer } from "./effectInitializer.ts";
 import { now } from "../../utils/time.ts";
 
 /**
- * 获取并验证 action request 和 parameter schema
+ * 解析 JSON Schema 字符串为对象
  */
-const getActionRequestAndSchema = (
-  state: Immutable<AgentState>,
-  actionRequestId: string,
-): {
-  request: { actionName: string; intention: string };
-  parameterSchema: string;
-  outputSchema: Record<string, unknown>;
-} => {
-  // 从 state 获取 action
-  const action = state.actions[actionRequestId];
-  if (!action) {
-    throw new Error(`Action not found for actionRequestId: ${actionRequestId}`);
-  }
-
-  // 从 state.actionDefinitions 中获取 action 的 parameter schema
-  const actionDef = state.actionDefinitions[action.request.actionName];
-  if (!actionDef) {
-    throw new Error(`Action definition not found for actionName: ${action.request.actionName}`);
-  }
-
-  const parameterSchema = actionDef.schema;
-
-  // 解析 parameter schema 为 JSON Schema 对象
-  let outputSchema: Record<string, unknown>;
+const parseSchema = (
+  schemaString: string,
+  actionName: string,
+): Record<string, unknown> => {
   try {
-    outputSchema = JSON.parse(parameterSchema);
+    return JSON.parse(schemaString);
   } catch {
-    throw new Error(`Invalid parameter schema JSON for actionName: ${action.request.actionName}`);
+    throw new Error(`Invalid parameter schema JSON for actionName: ${actionName}`);
   }
-
-  return { 
-    request: { actionName: action.request.actionName, intention: action.request.intention }, 
-    parameterSchema, 
-    outputSchema 
-  };
 };
 
 /**
- * 构建增强的系统提示词
+ * 构建增强的系统提示词（柯里化最后一个参数）
  */
 const buildEnhancedSystemPrompts = (
   baseSystemPrompts: string,
   actionName: string,
   intention: string,
-  parameterSchema: string,
-): string => {
-  return `${baseSystemPrompts}
+) => (funcName: string): string => {
+  return `
 
 ## Action Parameter Refinement Task
 You need to generate parameters for the following action:
 
 **Action Name:** ${actionName}
 **Intention:** ${intention}
-**Parameter Schema (JSON Schema):**
-${parameterSchema}
 
-Please generate parameters that conform to the provided JSON Schema based on the intention and conversation history. Return the parameters as a valid JSON object that matches the schema.`;
+**IMPORTANT:** You must return the result by calling the ${funcName} function. The parameters passed to ${funcName} must conform to the provided JSON Schema based on the intention and conversation history.
+
+---
+
+## Main Task System Prompt (for reference)
+================================================================================
+${baseSystemPrompts}
+================================================================================
+`;
 };
 
 /**
@@ -124,23 +103,33 @@ export const createRefineActionCallEffectInitializer = (
     async (dispatch: Dispatch, isCancelled: () => boolean) => {
       const actionRequestId = effect.actionRequestId;
 
-      // 获取并验证 action request 和 schema
-      const { request, parameterSchema, outputSchema } = getActionRequestAndSchema(
-        state,
-        actionRequestId,
-      );
+      // 从 state 获取 action
+      const action = state.actions[actionRequestId];
+      if (!action) {
+        throw new Error(`Action not found for actionRequestId: ${actionRequestId}`);
+      }
 
-      // 构建增强的系统提示词
-      const enhancedSystemPrompts = buildEnhancedSystemPrompts(
+      // 从 action 获取 name 和 intention
+      const { actionName, intention } = action.request;
+
+      // 用 name 获取 schema
+      const actionDef = state.actionDefinitions[actionName];
+      if (!actionDef) {
+        throw new Error(`Action definition not found for actionName: ${actionName}`);
+      }
+      const parameterSchema = actionDef.schema;
+      const outputSchema = parseSchema(parameterSchema, actionName);
+
+      // 创建 getSystemPrompts 函数（柯里化后直接使用）
+      const getSystemPrompts = buildEnhancedSystemPrompts(
         state.systemPrompts,
-        request.actionName,
-        request.intention,
-        parameterSchema,
+        actionName,
+        intention
       );
 
       // 调用 LLM（think）：根据 intention、schema 和历史消息生成符合 schema 的 parameters
       const result = await think(
-        enhancedSystemPrompts,
+        getSystemPrompts,
         Array.from(state.historyMessages),
         outputSchema,
       );
