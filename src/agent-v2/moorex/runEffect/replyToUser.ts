@@ -10,7 +10,6 @@ import type {
 import type { EffectInitializer, RunEffectOptions } from "./types.ts";
 import type { Dispatch } from "./effectInitializer.ts";
 import { createEffectInitializer } from "./effectInitializer.ts";
-import { now } from "../../../utils/time.ts";
 
 /**
  * 收集相关的历史消息（从第一条消息到 lastHistoryMessageId 的所有消息）
@@ -43,7 +42,7 @@ const dispatchChunkReceived = (
     kind: "assistant-chunk-received",
     messageId,
     chunk,
-    timestamp: now(),
+    timestamp: Date.now(),
   };
   dispatch(chunkSignal as Immutable<AgentSignal>);
 };
@@ -53,17 +52,13 @@ const dispatchChunkReceived = (
  */
 const completeReplyMessage = (
   messageId: string,
-  completeUserMessage: (messageId: string) => void,
   dispatch: Dispatch
 ): void => {
-  // 调用 completeUserMessage 回调
-  completeUserMessage(messageId);
-
   // dispatch assistant-message-complete 信号
   const completeSignal: AssistantMessageCompleteSignal = {
     kind: "assistant-message-complete",
     messageId,
-    timestamp: now(),
+    timestamp: Date.now(),
   };
   dispatch(completeSignal as Immutable<AgentSignal>);
 };
@@ -81,10 +76,6 @@ export const createReplyToUserEffectInitializer = (
     async (dispatch: Dispatch, isCancelled: () => boolean) => {
       const {
         behavior: { speak },
-        message: {
-          sendChunk: sendUserMessageChunk,
-          complete: completeUserMessage,
-        },
       } = options;
 
       const messageId = effect.messageId;
@@ -118,14 +109,11 @@ export const createReplyToUserEffectInitializer = (
           return;
         }
         
-        // 调用回调
-        sendUserMessageChunk(messageId, chunk);
-
         // dispatch assistant-chunk-received 信号
         dispatchChunkReceived(messageId, chunk, dispatch);
       }
 
       // 完成回复消息
-      completeReplyMessage(messageId, completeUserMessage, dispatch);
+      completeReplyMessage(messageId, dispatch);
     }
   );

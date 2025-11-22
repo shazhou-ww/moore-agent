@@ -30,7 +30,7 @@ export type {
 
 // 导出工具函数
 export { createId, makeLLMEffectKey, makeToolEffectKey } from "./utils/id.ts";
-export { now, before, maxTimestamp } from "./utils/time.ts";
+export { before, maxTimestamp } from "./utils/time.ts";
 export {
   serializeSnapshot,
   deserializeSnapshot,

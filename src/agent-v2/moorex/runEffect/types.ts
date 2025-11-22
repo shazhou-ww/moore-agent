@@ -51,16 +51,6 @@ export type ActFn = (
 ) => Promise<string>; // 返回结果字符串
 
 /**
- * 发送用户消息块函数类型
- */
-export type SendUserMessageChunkFn = (messageId: string, chunk: string) => void;
-
-/**
- * 完成用户消息函数类型
- */
-export type CompleteUserMessageFn = (messageId: string) => void;
-
-/**
  * RunEffect 选项
  */
 export type RunEffectOptions = {
@@ -68,10 +58,6 @@ export type RunEffectOptions = {
     think: ThinkFn;
     speak: SpeakFn;
     act: ActFn;
-  };
-  message: {
-    sendChunk: SendUserMessageChunkFn;
-    complete: CompleteUserMessageFn;
   };
   options: {
     reaction: {

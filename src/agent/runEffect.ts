@@ -17,7 +17,6 @@ import type {
   ToolCallFn,
 } from "../types/effects.ts";
 import { createId } from "../utils/id.ts";
-import { now } from "../utils/time.ts";
 import debug from "debug";
 
 const log = debug("agent:runEffect");
@@ -83,7 +82,7 @@ const createLLMEffectInitializer = (
               kind: "assistant-chunk",
               messageId,
               chunk: mergedChunk,
-              timestamp: now(),
+              timestamp: Date.now(),
             };
             dispatch(chunkSignal as Immutable<Signal>);
             chunkQueue = [];
@@ -127,7 +126,7 @@ const createLLMEffectInitializer = (
             toolCalls: completedToolCalls
               ? convertToolCalls(completedToolCalls)
               : [],
-            timestamp: now(),
+            timestamp: Date.now(),
           };
           dispatch(completeSignal as Immutable<Signal>);
         };
@@ -176,7 +175,7 @@ const createToolEffectInitializer = (
           kind: "tool",
           content: result,
           callId: effect.call.id,
-          timestamp: now(),
+          timestamp: Date.now(),
         };
 
         dispatch(toolMessage as Immutable<Signal>);

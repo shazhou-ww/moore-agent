@@ -1,5 +1,3 @@
-export const now = (): number => Date.now();
-
 export const before = (timestamp: number, offsetMs: number): number =>
   timestamp - offsetMs;
 

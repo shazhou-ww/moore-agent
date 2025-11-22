@@ -5,7 +5,6 @@ import type { AgentSignal, ActionCompletedSignal } from "../agentSignal.ts";
 import type { EffectInitializer, RunEffectOptions } from "./types.ts";
 import type { Dispatch } from "./effectInitializer.ts";
 import { createEffectInitializer } from "./effectInitializer.ts";
-import { now } from "../../../utils/time.ts";
 
 /**
  * 获取并验证 action request 和 parameters
@@ -47,7 +46,7 @@ const dispatchActionCompleted = (
     kind: "action-completed",
     actionRequestId,
     result,
-    timestamp: now(),
+    timestamp: Date.now(),
   };
   dispatch(signal as Immutable<AgentSignal>);
 };

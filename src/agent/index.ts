@@ -14,7 +14,7 @@ import { agentStateSchema } from "../types/schema.ts";
 import { createHash } from "crypto";
 import type { AgentEvent } from "./events.ts";
 import { createId } from "../utils/id.ts";
-import { before, now } from "../utils/time.ts";
+import { before } from "../utils/time.ts";
 import debug from "debug";
 import type { Effect, LLMCallFn, ToolCallFn } from "../types/effects.ts";
 import { transition } from "./transition.ts";
@@ -83,11 +83,11 @@ export const createAgent = async (deps: AgentDeps): Promise<Agent> => {
         id: createId(),
         kind: "system",
         content: deps.systemPrompt,
-        timestamp: now(),
+        timestamp: Date.now(),
       },
       messages: [],
       partialMessage: null,
-      lastSentToLLMAt: before(now(), 1),
+      lastSentToLLMAt: before(Date.now(), 1),
     };
   }
   const initialState = await loadInitialState();
