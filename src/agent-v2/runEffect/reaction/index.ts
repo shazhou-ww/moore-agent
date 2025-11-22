@@ -19,7 +19,7 @@ import {
 /**
  * 解析 LLM 返回的 decide 函数调用结果
  */
-const parseDecideFunctionCall = (result: string): DecideFunctionCall | null => {
+const parseDecideFunctionCall = (result: string): DecideFunctionCall => {
   try {
     // 尝试解析为直接的函数调用结果
     const parsed = JSON.parse(result);
@@ -36,21 +36,14 @@ const parseDecideFunctionCall = (result: string): DecideFunctionCall | null => {
         return decideFunctionCallSchema.parse(args);
       }
     }
+    throw new Error(`Failed to parse decide function call: missing type or tool_calls in response: ${result}`);
   } catch (error) {
-    // 如果解析失败，尝试查找 JSON 块
-    const jsonMatch = result.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      try {
-        const parsed = JSON.parse(jsonMatch[0]!);
-        if (parsed.type) {
-          return decideFunctionCallSchema.parse(parsed);
-        }
-      } catch {
-        // 忽略解析错误
-      }
+    // 如果解析失败，直接抛出错误
+    if (error instanceof Error) {
+      throw new Error(`Failed to parse decide function call from LLM response: ${error.message}. Response: ${result}`);
     }
+    throw new Error(`Failed to parse decide function call from LLM response: ${String(error)}. Response: ${result}`);
   }
-  return null;
 };
 
 /**
@@ -161,12 +154,6 @@ export const createReactionEffectInitializer = (
 
           // 解析 LLM 返回的结果
           const decideCall = parseDecideFunctionCall(result);
-
-          if (!decideCall) {
-            throw new Error(
-              `Failed to parse decide function call from LLM response: ${result}`,
-            );
-          }
 
           // 处理决策
           if (decideCall.type === "decision-made") {

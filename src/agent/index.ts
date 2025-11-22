@@ -68,9 +68,17 @@ export const createAgent = async (deps: AgentDeps): Promise<Agent> => {
   });
   
   // 尝试加载最新状态
-  const loadInitialState = async () => {
+  const loadInitialState = async (): Promise<AgentState> => {
     const head = await store.head();
-    return head?.value ?? {
+    if (head?.value) {
+      // 将 readonly 的数据转换为可变的 AgentState
+      const loadedState = head.value as AgentState;
+      return {
+        ...loadedState,
+        messages: [...loadedState.messages],
+      };
+    }
+    return {
       systemMessage: {
         id: createId(),
         kind: "system",
@@ -80,9 +88,9 @@ export const createAgent = async (deps: AgentDeps): Promise<Agent> => {
       messages: [],
       partialMessage: null,
       lastSentToLLMAt: before(now(), 1),
-    } as AgentState;
+    };
   }
-  const initialState: AgentState = await loadInitialState();
+  const initialState = await loadInitialState();
 
   // 创建 runEffect 函数
   const runEffect = createRunEffect({

@@ -36,9 +36,7 @@ export const buildSystemPrompt = (
     ? `\n注意：当前只显示了最近 ${messageRounds} 轮消息，还有 ${totalRounds - messageRounds} 轮消息未加载。如果需要更多历史消息，可以调用 decide 函数并传入 { type: "more-history" }。`
     : "";
 
-  return `${baseSystemPrompts}
-
-## Reaction Decision Task
+  return `## Reaction Decision Task
 
 你需要根据当前状态决定下一步的计划。
 
@@ -56,6 +54,14 @@ ${historyInfo}
 
 请调用 decide 函数来做出决策。如果需要更多信息，可以：
 - 调用 decide({ type: "more-history" }) 来获取更多历史消息
-- 调用 decide({ type: "action-detail", ids: [...] }) 来获取特定 action 的详情（request & response）`;
+- 调用 decide({ type: "action-detail", ids: [...] }) 来获取特定 action 的详情（request & response）
+
+---
+
+## 主线任务的系统提示词
+================================================================================
+${baseSystemPrompts}
+================================================================================
+`;
 };
 
