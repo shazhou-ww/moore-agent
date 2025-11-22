@@ -74,8 +74,8 @@ export type RunEffectOptions = {
   };
   options: {
     reaction: {
-      initialHistoryRounds: number; // 初始的上下文消息轮次 n
-      additionalHistoryRounds: number; // 每次追加的消息轮次 m
+      initialHistoryCount: number; // 初始的上下文消息条数 n
+      additionalHistoryCount: number; // 每次追加的消息条数 m
     };
   };
 };

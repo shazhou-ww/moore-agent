@@ -108,7 +108,6 @@ export const reactionDecisionSchema = z.discriminatedUnion("type", [
  */
 export const reactionCompleteSignalSchema = z.object({
   kind: z.literal("reaction-complete"),
-  messageId: z.string(), // 关联到 ReactionEffect 的 messageId
   decision: reactionDecisionSchema,
   timestamp: z.number(),
 });

@@ -1,34 +1,93 @@
-import { v4 } from "uuid";
-import { partition } from "lodash";
+import { partition, pickBy, keys } from "lodash";
 import type { Immutable } from "mutative";
 import type { AgentState, HistoryMessage } from "../../agentState.ts";
 import type { ReactionEffect } from "../../agentEffects.ts";
-import type { AgentSignal, ReactionCompleteSignal, ReactionDecision } from "../../agentSignal.ts";
+import type {
+  AgentSignal,
+  ReactionCompleteSignal,
+  ReactionDecision,
+} from "../../agentSignal.ts";
 import type { EffectInitializer, RunEffectOptions } from "../types.ts";
 import type { Dispatch } from "../effectInitializer.ts";
 import { createEffectInitializer } from "../effectInitializer.ts";
-import { now } from "../../../utils/time.ts";
-import { iterationDecisionSchema, type IterationDecision } from "./toolSchema.ts";
+import {
+  iterationDecisionSchema,
+  type IterationDecision,
+} from "./toolSchema.ts";
 import { toJSONSchema } from "zod";
 import { buildSystemPrompt } from "./prompt.ts";
-import {
-  collectUnrespondedItems,
-  type ReactionContext,
-} from "./utils.ts";
+
+/**
+ * Reaction 上下文
+ */
+type ReactionContext = {
+  unrespondedUserMessages: HistoryMessage[];
+  unrespondedActionIds: string[];
+};
+
+/**
+ * 收集尚未响应的消息和 action responses
+ */
+const collectUnrespondedItems = (
+  state: Immutable<AgentState>,
+): ReactionContext => {
+  const lastReactionTimestamp = state.lastReactionTimestamp;
+  
+  // 收集尚未响应的用户消息（timestamp > lastReactionTimestamp）
+  const unrespondedUserMessages = state.historyMessages.filter(
+    (msg) => msg.type === "user" && msg.timestamp > lastReactionTimestamp,
+  );
+
+  // 收集尚未响应的 action responses（timestamp > lastReactionTimestamp）
+  const unrespondedActionIds = keys(
+    pickBy(
+      state.actionResponses,
+      (response) => response.timestamp > lastReactionTimestamp,
+    ),
+  );
+
+  return { unrespondedUserMessages, unrespondedActionIds };
+};
+
+/**
+ * 计算被处理的最后一条 user message 或 action response 的时间戳
+ */
+const getLastProcessedTimestamp = (
+  state: Immutable<AgentState>,
+  reactionContext: ReactionContext,
+): number => {
+  const lastReactionTimestamp = state.lastReactionTimestamp;
+  const userMessageTimestamps = reactionContext.unrespondedUserMessages.map(
+    (msg) => msg.timestamp,
+  );
+  const actionResponseTimestamps = reactionContext.unrespondedActionIds
+    .map((id) => state.actionResponses[id]?.timestamp)
+    .filter((ts): ts is number => ts !== undefined);
+
+  return Math.max(
+    lastReactionTimestamp,
+    ...userMessageTimestamps,
+    ...actionResponseTimestamps,
+  );
+};
 
 /**
  * 检查是否有新输入，如果没有则返回 noop 决策
  */
 const checkAndHandleNoopDecision = (
+  state: Immutable<AgentState>,
   reactionContext: ReactionContext,
   dispatch: Dispatch,
 ): boolean => {
-  if (reactionContext.unrespondedUserMessages.length === 0 && reactionContext.unrespondedActionIds.length === 0) {
+  if (
+    reactionContext.unrespondedUserMessages.length === 0 &&
+    reactionContext.unrespondedActionIds.length === 0
+  ) {
+    const timestamp = getLastProcessedTimestamp(state, reactionContext);
     const signal: ReactionCompleteSignal = {
       kind: "reaction-complete",
-      messageId: v4(),
       decision: { type: "noop" },
-      timestamp: now(),
+      timestamp,
     };
     dispatch(signal as Immutable<AgentSignal>);
     return true;
@@ -39,24 +98,24 @@ const checkAndHandleNoopDecision = (
 /**
  * 构建消息窗口
  * 1. 上次 reaction 之后的所有消息（both user/assistant messages）
- * 2. prepend 上上次 reaction 之前的 currentHistoryRounds 轮消息
+ * 2. prepend 上上次 reaction 之前的 currentHistoryCount 条消息
  */
 const buildMessageWindow = (
   state: Immutable<AgentState>,
-  lastReactionTimestamp: number,
-  currentHistoryRounds: number,
+  currentHistoryCount: number,
 ): HistoryMessage[] => {
   const allMessages = state.historyMessages;
-  
+  const lastReactionTimestamp = state.lastReactionTimestamp;
+
   // Partition: 分割为 lastReactionTimestamp 之前和之后的消息
   const [messagesBefore, messagesAfter] = partition(
     allMessages,
     (msg: HistoryMessage) => msg.timestamp <= lastReactionTimestamp,
   );
-  
+
   // 从之前的部分截取最后一段
-  const prependedMessages = messagesBefore.slice(-currentHistoryRounds);
-  
+  const prependedMessages = messagesBefore.slice(-currentHistoryCount);
+
   // 合并：先放历史消息，再放新消息
   return [...prependedMessages, ...messagesAfter];
 };
@@ -66,7 +125,6 @@ const buildMessageWindow = (
  */
 const prepareIterationContext = (
   state: Immutable<AgentState>,
-  lastReactionTimestamp: number,
   iterationState: IterationState,
 ): {
   systemPrompt: string;
@@ -75,8 +133,7 @@ const prepareIterationContext = (
   // 构建消息窗口
   const messageWindow = buildMessageWindow(
     state,
-    lastReactionTimestamp,
-    iterationState.currentHistoryRounds,
+    iterationState.currentHistoryCount,
   );
 
   // 构建系统提示词
@@ -92,13 +149,17 @@ const iterationDecisionOutputSchema = toJSONSchema(iterationDecisionSchema);
 const performIterationDecision = async (
   systemPrompt: string,
   messageWindow: HistoryMessage[],
-  think: (systemPrompts: string, messageWindow: HistoryMessage[], outputSchema: Record<string, unknown>) => Promise<string>,
+  think: (
+    systemPrompts: string,
+    messageWindow: HistoryMessage[],
+    outputSchema: Record<string, unknown>
+  ) => Promise<string>
 ): Promise<IterationDecision> => {
   // 调用 LLM（think）：思考下一步决策
   const result = await think(
     systemPrompt,
     messageWindow,
-    iterationDecisionOutputSchema,
+    iterationDecisionOutputSchema
   );
 
   // 解析 LLM 返回的结果
@@ -110,7 +171,7 @@ const performIterationDecision = async (
  * 迭代状态
  */
 export type IterationState = {
-  currentHistoryRounds: number;
+  currentHistoryCount: number; // 当前加载的历史消息条数
   loadedActionDetailIds: Set<string>;
   decision: ReactionDecision | null;
 };
@@ -121,7 +182,7 @@ export type IterationState = {
 const handleIterationDecision = (
   decideCall: IterationDecision,
   iterationState: IterationState,
-  additionalHistoryRounds: number,
+  additionalHistoryCount: number,
 ): IterationState => {
   if (decideCall.type === "decision-made") {
     return {
@@ -132,32 +193,40 @@ const handleIterationDecision = (
     // 追溯更多历史消息
     return {
       ...iterationState,
-      currentHistoryRounds: iterationState.currentHistoryRounds + additionalHistoryRounds,
+      currentHistoryCount:
+        iterationState.currentHistoryCount + additionalHistoryCount,
     };
   } else if (decideCall.type === "action-detail") {
     // 补充 action 详情
     return {
       ...iterationState,
-      loadedActionDetailIds: new Set([...iterationState.loadedActionDetailIds, ...decideCall.ids]),
+      loadedActionDetailIds: new Set([
+        ...iterationState.loadedActionDetailIds,
+        ...decideCall.ids,
+      ]),
     };
   }
 
   // 不应该到达这里
-  throw new Error(`Unknown iteration decision type: ${(decideCall as { type: string }).type}`);
+  throw new Error(
+    `Unknown iteration decision type: ${(decideCall as { type: string }).type}`
+  );
 };
 
 /**
  * 发送决策结果信号
  */
 const dispatchReactionComplete = (
+  state: Immutable<AgentState>,
+  reactionContext: ReactionContext,
   decision: ReactionDecision,
   dispatch: Dispatch,
 ): void => {
+  const timestamp = getLastProcessedTimestamp(state, reactionContext);
   const signal: ReactionCompleteSignal = {
     kind: "reaction-complete",
-    messageId: v4(),
     decision,
-    timestamp: now(),
+    timestamp,
   };
   dispatch(signal as Immutable<AgentSignal>);
 };
@@ -169,34 +238,31 @@ export const createReactionEffectInitializer = (
   effect: Immutable<ReactionEffect>,
   state: Immutable<AgentState>,
   key: string,
-  options: RunEffectOptions,
-): EffectInitializer => {
-  const {
-    behavior: { think },
-    options: {
-      reaction: { initialHistoryRounds, additionalHistoryRounds },
-    },
-  } = options;
-
-  return createEffectInitializer(
+  options: RunEffectOptions
+): EffectInitializer =>
+  createEffectInitializer(
     async (dispatch: Dispatch, isCancelled: () => boolean) => {
-      const lastReactionTimestamp = state.lastReactionTimestamp;
+      const {
+        behavior: { think },
+        options: {
+          reaction: { initialHistoryCount, additionalHistoryCount },
+        },
+      } = options;
 
       // 收集尚未响应的消息和 action responses
-      const reactionContext: ReactionContext = collectUnrespondedItems(
-        state,
-        lastReactionTimestamp,
-      );
+      const reactionContext: ReactionContext = collectUnrespondedItems(state);
 
       // 如果没有新的输入，直接返回 noop 决策
-      if (checkAndHandleNoopDecision(reactionContext, dispatch)) {
+      if (checkAndHandleNoopDecision(state, reactionContext, dispatch)) {
         return;
       }
 
       // 初始化迭代状态
       let iterationState: IterationState = {
-        currentHistoryRounds: initialHistoryRounds,
-        loadedActionDetailIds: new Set<string>(reactionContext.unrespondedActionIds), // 初始加载未响应的 action 详情
+        currentHistoryCount: initialHistoryCount,
+        loadedActionDetailIds: new Set<string>(
+          reactionContext.unrespondedActionIds,
+        ), // 初始加载未响应的 action 详情
         decision: null,
       };
 
@@ -205,7 +271,6 @@ export const createReactionEffectInitializer = (
         // 1. 准备系统提示词和消息窗口
         const { systemPrompt, messageWindow } = prepareIterationContext(
           state,
-          lastReactionTimestamp,
           iterationState,
         );
 
@@ -213,7 +278,7 @@ export const createReactionEffectInitializer = (
         const decideCall = await performIterationDecision(
           systemPrompt,
           messageWindow,
-          think,
+          think
         );
 
         if (isCancelled()) {
@@ -224,13 +289,16 @@ export const createReactionEffectInitializer = (
         iterationState = handleIterationDecision(
           decideCall,
           iterationState,
-          additionalHistoryRounds,
+          additionalHistoryCount,
         );
       }
 
       // 发送决策结果
-      dispatchReactionComplete(iterationState.decision, dispatch);
-    },
+      dispatchReactionComplete(
+        state,
+        reactionContext,
+        iterationState.decision,
+        dispatch,
+      );
+    }
   );
-};
-
