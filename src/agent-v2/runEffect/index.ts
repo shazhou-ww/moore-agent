@@ -1,7 +1,7 @@
 import type { Immutable } from "mutative";
 import type { AgentState } from "../agentState.ts";
 import type { AgentEffect } from "../agentEffects.ts";
-import { createReactionEffectInitializer } from "./reaction.ts";
+import { createReactionEffectInitializer } from "./reaction/index.ts";
 import { createRefineActionCallEffectInitializer } from "./refineActionCall.ts";
 import { createReplyToUserEffectInitializer } from "./replyToUser.ts";
 import { createActionRequestEffectInitializer } from "./actionRequest.ts";

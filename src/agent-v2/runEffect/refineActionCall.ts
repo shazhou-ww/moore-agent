@@ -63,7 +63,7 @@ Please generate parameters that conform to the provided JSON Schema based on the
 
         // 使用 'refine-action' scene 调用 LLM，传入 intention、parameter schema 和历史消息
         // LLM 需要根据 intention、schema 和历史消息生成符合 schema 的 parameters
-        const result = await invokeLLM("refine-action", enhancedSystemPrompts, messageWindow);
+        const result = await invokeLLM("refine-action", enhancedSystemPrompts, messageWindow, []);
 
         if (isCancelled()) {
           return;

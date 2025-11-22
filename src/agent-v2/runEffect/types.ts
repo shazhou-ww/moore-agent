@@ -16,6 +16,18 @@ export type EffectInitializer = {
 export type LLMScene = "reaction" | "refine-action" | "reply-to-user";
 
 /**
+ * LLM 工具函数定义
+ */
+export type LLMTool = {
+  type: "function";
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>; // JSON Schema
+  };
+};
+
+/**
  * 非流式调用大模型函数类型
  * 返回结构化的决策结果（根据不同的 Effect 类型，返回不同的结果）
  */
@@ -23,6 +35,7 @@ export type InvokeLLMFn = (
   scene: LLMScene,
   systemPrompts: string,
   messageWindow: HistoryMessage[],
+  tools: LLMTool[], // 工具函数列表（必选，没有时传空数组）
 ) => Promise<string>; // 返回 JSON 字符串
 
 /**
@@ -78,6 +91,10 @@ export type RunEffectOptions = {
   getSystemPrompts: GetSystemPromptsFn; // 用于获取 system prompts
   sendUserMessageChunk: SendUserMessageChunkFn;
   completeUserMessage: CompleteUserMessageFn;
+  // Reaction 相关配置
+  actions: Record<string, string>; // Record<actionName, description> - 所有可用的 action 类型
+  reactionInitialHistoryRounds: number; // 初始的上下文消息轮次 n
+  reactionAdditionalHistoryRounds: number; // 每次追加的消息轮次 m
 };
 
 /**
