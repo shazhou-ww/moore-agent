@@ -12,26 +12,27 @@ import { now } from "../../utils/time.ts";
  */
 const getActionRequestAndParameters = (
   state: Immutable<AgentState>,
-  actionRequestId: string,
+  actionRequestId: string
 ): { actionName: string; parameters: string } | null => {
   // 从 state 获取 action
   const action = state.actions[actionRequestId];
   if (!action) {
-    console.warn(
-      `Action not found for actionRequestId: ${actionRequestId}`,
-    );
+    console.warn(`Action not found for actionRequestId: ${actionRequestId}`);
     return null;
   }
 
   // 检查是否有 parameters
   if (!action.parameter) {
     console.warn(
-      `Action parameters not found for actionRequestId: ${actionRequestId}`,
+      `Action parameters not found for actionRequestId: ${actionRequestId}`
     );
     return null;
   }
 
-  return { actionName: action.request.actionName, parameters: action.parameter };
+  return {
+    actionName: action.request.actionName,
+    parameters: action.parameter,
+  };
 };
 
 /**
@@ -40,7 +41,7 @@ const getActionRequestAndParameters = (
 const dispatchActionCompleted = (
   actionRequestId: string,
   result: string,
-  dispatch: Dispatch,
+  dispatch: Dispatch
 ): void => {
   const signal: ActionCompletedSignal = {
     kind: "action-completed",
@@ -58,14 +59,13 @@ export const createActionRequestEffectInitializer = (
   effect: Immutable<ActionRequestEffect>,
   state: Immutable<AgentState>,
   key: string,
-  options: RunEffectOptions,
-): EffectInitializer => {
-  const {
-    behavior: { act },
-  } = options;
-
-  return createEffectInitializer(
+  options: RunEffectOptions
+): EffectInitializer =>
+  createEffectInitializer(
     async (dispatch: Dispatch, isCancelled: () => boolean) => {
+      const {
+        behavior: { act },
+      } = options;
       const { actionRequestId } = effect;
 
       // 获取并验证 action request 和 parameters
@@ -83,6 +83,5 @@ export const createActionRequestEffectInitializer = (
 
       // 发送 action completed 信号
       dispatchActionCompleted(actionRequestId, result, dispatch);
-    },
+    }
   );
-};
