@@ -16,11 +16,11 @@ import { now } from "../../utils/time.ts";
  */
 const getRelatedHistoryMessages = (
   state: Immutable<AgentState>,
-  lastHistoryMessageId: string,
+  lastHistoryMessageId: string
 ): HistoryMessage[] => {
   const relatedHistoryMessages: HistoryMessage[] = [];
   let foundLastMessage = false;
-  
+
   // 从后往前遍历，找到 lastHistoryMessageId，然后收集从起点到它的所有消息
   for (let i = state.historyMessages.length - 1; i >= 0; i--) {
     const msg = state.historyMessages[i]!;
@@ -41,66 +41,14 @@ const getRelatedHistoryMessages = (
 };
 
 /**
- * Chunk 处理器
- */
-type ChunkProcessor = {
-  addChunk: (chunk: string) => void;
-  flush: () => void;
-};
-
-/**
- * 创建 chunk 处理器
- */
-const createChunkProcessor = (
-  messageId: string,
-  sendUserMessageChunk: (messageId: string, chunk: string) => void,
-  dispatch: Dispatch,
-  isCancelled: () => boolean,
-): ChunkProcessor => {
-  let chunkQueue: string[] = [];
-  let totalLength = 0;
-  const CHUNK_QUEUE_SIZE_THRESHOLD = 100; // chunk 合并阈值
-
-  const flush = () => {
-    if (chunkQueue.length > 0) {
-      const mergedChunk = chunkQueue.join("");
-      // 调用 sendUserMessageChunk 回调
-      sendUserMessageChunk(messageId, mergedChunk);
-
-      // dispatch assistant-chunk-received 信号
-      const chunkSignal: AssistantChunkReceivedSignal = {
-        kind: "assistant-chunk-received",
-        messageId,
-        chunk: mergedChunk,
-        timestamp: now(),
-      };
-      dispatch(chunkSignal as Immutable<AgentSignal>);
-
-      chunkQueue = [];
-      totalLength = 0;
-    }
-  };
-
-  const addChunk = (chunk: string) => {
-    chunkQueue.push(chunk);
-    totalLength += chunk.length;
-
-    // 如果 queue 中的内容超过阈值，触发 flush
-    if (totalLength >= CHUNK_QUEUE_SIZE_THRESHOLD) {
-      flush();
-    }
-  };
-
-  return { addChunk, flush };
-};
-
-/**
  * 处理 chunks 迭代
  */
 const processChunks = async (
   chunkIterator: AsyncIterator<string>,
-  chunkProcessor: ChunkProcessor,
-  isCancelled: () => boolean,
+  messageId: string,
+  sendUserMessageChunk: (messageId: string, chunk: string) => void,
+  dispatch: Dispatch,
+  isCancelled: () => boolean
 ): Promise<void> => {
   while (true) {
     const { done, value } = await chunkIterator.next();
@@ -110,7 +58,18 @@ const processChunks = async (
     if (isCancelled()) {
       return;
     }
-    chunkProcessor.addChunk(value);
+    
+    // 直接调用回调
+    sendUserMessageChunk(messageId, value);
+
+    // dispatch assistant-chunk-received 信号
+    const chunkSignal: AssistantChunkReceivedSignal = {
+      kind: "assistant-chunk-received",
+      messageId,
+      chunk: value,
+      timestamp: now(),
+    };
+    dispatch(chunkSignal as Immutable<AgentSignal>);
   }
 };
 
@@ -120,7 +79,7 @@ const processChunks = async (
 const completeReplyMessage = (
   messageId: string,
   completeUserMessage: (messageId: string) => void,
-  dispatch: Dispatch,
+  dispatch: Dispatch
 ): void => {
   // 调用 completeUserMessage 回调
   completeUserMessage(messageId);
@@ -141,15 +100,18 @@ export const createReplyToUserEffectInitializer = (
   effect: Immutable<ReplyToUserEffect>,
   state: Immutable<AgentState>,
   key: string,
-  options: RunEffectOptions,
-): EffectInitializer => {
-  const {
-    behavior: { speak },
-    message: { sendChunk: sendUserMessageChunk, complete: completeUserMessage },
-  } = options;
-  
-  return createEffectInitializer(
+  options: RunEffectOptions
+): EffectInitializer =>
+  createEffectInitializer(
     async (dispatch: Dispatch, isCancelled: () => boolean) => {
+      const {
+        behavior: { speak },
+        message: {
+          sendChunk: sendUserMessageChunk,
+          complete: completeUserMessage,
+        },
+      } = options;
+
       const messageId = effect.messageId;
 
       // 验证 reply context
@@ -161,36 +123,29 @@ export const createReplyToUserEffectInitializer = (
       // 收集相关的历史消息
       const relatedHistoryMessages = getRelatedHistoryMessages(
         state,
-        replyContext.lastHistoryMessageId,
-      );
-
-      // 创建 chunk 处理器
-      const chunkProcessor = createChunkProcessor(
-        messageId,
-        sendUserMessageChunk,
-        dispatch,
-        isCancelled,
+        replyContext.lastHistoryMessageId
       );
 
       // 调用流式 LLM（speak）：向用户解释说明
       const chunkIterator = await speak(
         state.systemPrompts,
-        Array.from(relatedHistoryMessages),
+        Array.from(relatedHistoryMessages)
       );
 
       // 处理 chunks
-      await processChunks(chunkIterator, chunkProcessor, isCancelled);
+      await processChunks(
+        chunkIterator,
+        messageId,
+        sendUserMessageChunk,
+        dispatch,
+        isCancelled
+      );
 
       if (isCancelled()) {
         return;
       }
 
-      //  flush 剩余的 chunks
-      chunkProcessor.flush();
-
       // 完成回复消息
       completeReplyMessage(messageId, completeUserMessage, dispatch);
-    },
+    }
   );
-};
-
