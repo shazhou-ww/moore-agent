@@ -140,80 +140,57 @@ ${codeBlockJson({ type: "more-history" })}
 `
     : "";
 
-  return `## Reaction Decision Task
+  return `## Reaction Decision
 
-You need to decide on the next plan based on the current state.
+Decide the next action based on current state.
 
-### Available Action Types:
+### Available Actions:
 ${actionsList}
 
-### Initiated Actions:
+### Running Actions:
 ${actionSummariesText || "(none)"}
 ${historyInfo}
 
-### Decision Options (in priority order):
+### Decision Priority:
 
-**1. reply-to-user** (DEFAULT - Use this unless you clearly need more information):
-You should respond to the user when you have sufficient information to provide a meaningful response. This is the default action - you should reply to the user unless there is a clear information gap that prevents you from doing so.
+**1. adjust-actions** (PRIORITY):
+- **Always use actions first** to gather information before replying
+- Create actions when you need external info, real-time data, or verification
+- Cancel irrelevant actions and add new ones as needed
 
-**2. adjust-actions** (Only when there is a clear information gap):
-Adjust actions only when you have identified a specific information gap that requires additional actions:
-   - **Cancel actions**: Cancel running actions that are no longer needed based on the current context
-   - **Add actions**: Create new actions that are needed to supplement the current task when there is a clear information gap
+**2. reply-to-user**:
+- Only when you have ALL required information from completed actions
+- Never guess - use actions to get accurate data
 
-**Decision Priority:**
-- **Default to reply-to-user** unless you clearly identify missing information
-- Only consider adjust-actions when there is a clear information gap that requires new actions
+### Examples:
 
-Please call the ${funcName} function to make a decision. Examples:
-
-**To get more information:**
-
-${moreHistoryExample}Get details for specific actions:
-
+Get action details:
 ${codeBlockJson({ 
   type: "action-detail", 
-  ids: ["action-id-1", "action-id-2"] 
+  ids: ["action-id-1"] 
 })}
 
-**To make a final decision:**
-
-Reply to the user (DEFAULT - use this in most cases):
-
-${codeBlockJson({ 
-  type: "decision-made", 
-  decision: { 
-    type: "reply-to-user", 
-    relatedActionIds: ["action-id-1", "action-id-2"] 
-  } 
-})}
-
-Adjust actions (only when there is a clear information gap):
-
-Cancel running actions that are no longer needed, and add new actions that are required:
-
-${codeBlockJson({ 
-  type: "decision-made", 
-  decision: { 
-    type: "adjust-actions", 
-    cancelActions: ["action-id-1"], 
-    newActions: [
-      { 
-        actionName: "action-name", 
-        initialIntent: "intent description" 
-      }
-    ] 
-  } 
-})}
-
-If no actions need to be adjusted, use adjust-actions with empty arrays:
-
+${moreHistoryExample}Create actions to gather information:
 ${codeBlockJson({ 
   type: "decision-made", 
   decision: { 
     type: "adjust-actions", 
     cancelActions: [], 
-    newActions: [] 
+    newActions: [
+      { 
+        actionName: "webSearch", 
+        initialIntent: "Search for information about [topic]" 
+      }
+    ] 
+  } 
+})}
+
+Reply when you have all information:
+${codeBlockJson({ 
+  type: "decision-made", 
+  decision: { 
+    type: "reply-to-user", 
+    relatedActionIds: ["action-id-1"] 
   } 
 })}
 

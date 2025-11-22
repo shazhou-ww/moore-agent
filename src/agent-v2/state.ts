@@ -36,6 +36,11 @@ export const loadOrCreateInitialState = async (
   systemPrompts: string,
   actions: Record<string, ActionWithRun>,
 ): Promise<AgentState> => {
+  // 提取 action definitions（不包含 run 函数）
+  const actionDefinitions = mapValues(actions, (action) =>
+    pick(action, ["schema", "description"]),
+  );
+
   const head = await store.head();
   if (head?.value) {
     log("Loaded state from persistence");
@@ -43,6 +48,9 @@ export const loadOrCreateInitialState = async (
     const loadedState = head.value as AgentState;
     return {
       ...loadedState,
+      // 使用最新的 systemPrompts 和 actionDefinitions（确保配置总是最新的）
+      systemPrompts,
+      actionDefinitions,
       historyMessages: [...loadedState.historyMessages],
       actions: { ...loadedState.actions },
       replies: { ...loadedState.replies },
