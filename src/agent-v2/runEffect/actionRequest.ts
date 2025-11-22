@@ -14,25 +14,24 @@ const getActionRequestAndParameters = (
   state: Immutable<AgentState>,
   actionRequestId: string,
 ): { actionName: string; parameters: string } | null => {
-  // 从 state 获取 action request
-  const request = state.actionRequests[actionRequestId];
-  if (!request) {
+  // 从 state 获取 action
+  const action = state.actions[actionRequestId];
+  if (!action) {
     console.warn(
-      `Action request not found for actionRequestId: ${actionRequestId}`,
+      `Action not found for actionRequestId: ${actionRequestId}`,
     );
     return null;
   }
 
-  // 从 state.actionParameters 中获取对应的 parameters
-  const parameters = state.actionParameters[actionRequestId];
-  if (!parameters) {
+  // 检查是否有 parameters
+  if (!action.parameter) {
     console.warn(
       `Action parameters not found for actionRequestId: ${actionRequestId}`,
     );
     return null;
   }
 
-  return { actionName: request.actionName, parameters };
+  return { actionName: action.request.actionName, parameters: action.parameter };
 };
 
 /**

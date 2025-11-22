@@ -1,5 +1,5 @@
 import type { Immutable } from "mutative";
-import type { AgentState } from "../../agentState.ts";
+import type { AgentState, ActionResponse } from "../../agentState.ts";
 import type { IterationState } from "./index.ts";
 
 /**
@@ -9,7 +9,7 @@ const extractAvailableActions = (
   state: Immutable<AgentState>,
 ): Record<string, string> => {
   return Object.fromEntries(
-    Object.entries(state.actions).map(([name, def]) => [name, def.description]),
+    Object.entries(state.actionDefinitions).map(([name, def]) => [name, def.description]),
   );
 };
 
@@ -26,7 +26,7 @@ const buildActionsList = (availableActions: Record<string, string>): string => {
  * 获取 action 的状态
  */
 const getActionStatus = (
-  response: Immutable<AgentState["actionResponses"][string]> | undefined,
+  response: Immutable<ActionResponse> | null,
 ): "pending" | "completed" | "cancelled" => {
   if (!response) {
     return "pending";
@@ -39,26 +39,24 @@ const getActionStatus = (
  */
 const formatActionSummary = (
   actionRequestId: string,
-  request: Immutable<AgentState["actionRequests"][string]>,
-  response: Immutable<AgentState["actionResponses"][string]> | undefined,
-  parameters: string | undefined,
+  action: Immutable<AgentState["actions"][string]>,
   includeDetails: boolean,
 ): string => {
-  const status = getActionStatus(response);
-  let text = `- ID: ${actionRequestId}, Name: ${request.actionName}, Intention: ${request.intention}, Status: ${status}`;
+  const status = getActionStatus(action.response);
+  let text = `- ID: ${actionRequestId}, Name: ${action.request.actionName}, Intention: ${action.request.intention}, Status: ${status}`;
 
   if (includeDetails) {
     const requestDetail = JSON.stringify({
-      actionName: request.actionName,
-      intention: request.intention,
-      parameters: parameters ? JSON.parse(parameters) : undefined,
+      actionName: action.request.actionName,
+      intention: action.request.intention,
+      parameters: action.parameter ? JSON.parse(action.parameter) : undefined,
     });
     text += `\n  Request: ${requestDetail}`;
 
-    if (response) {
+    if (action.response) {
       const responseDetail = JSON.stringify({
-        type: response.type,
-        ...(response.type === "completed" ? { result: response.result } : {}),
+        type: action.response.type,
+        ...(action.response.type === "completed" ? { result: action.response.result } : {}),
       });
       text += `\n  Response: ${responseDetail}`;
     }
@@ -74,17 +72,13 @@ const buildActionSummariesText = (
   state: Immutable<AgentState>,
   loadedActionDetailIds: Set<string>,
 ): string => {
-  return Object.entries(state.actionRequests)
-    .map(([actionRequestId, request]) => {
-      const response = state.actionResponses[actionRequestId];
-      const parameters = state.actionParameters[actionRequestId];
+  return Object.entries(state.actions)
+    .map(([actionRequestId, action]) => {
       const includeDetails = loadedActionDetailIds.has(actionRequestId);
 
       return formatActionSummary(
         actionRequestId,
-        request,
-        response,
-        parameters,
+        action,
         includeDetails,
       );
     })

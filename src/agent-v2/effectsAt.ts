@@ -18,19 +18,24 @@ import type {
  */
 const extractReactionEffect = ({
   historyMessages,
-  actionResponses,
+  actions,
   lastReactionTimestamp,
 }: Immutable<AgentState>): ReactionEffect | null => {
   // 计算此次 reaction 的 timestamp：max(last user message timestamp, last action response timestamp)
+  const userMessageTimestamps = historyMessages
+    // 只取用户消息且时间戳大于上次 reaction 时间
+    .filter(({ type, timestamp }) => type === "user" && timestamp > lastReactionTimestamp)
+    .map(({ timestamp }) => timestamp);
+  
+  const actionResponseTimestamps = Object.values(actions)
+    // 只取有 response 且时间戳大于上次 reaction 时间的 action
+    .filter((action) => action.response && action.response.timestamp > lastReactionTimestamp)
+    .map((action) => action.response!.timestamp);
+  
   const timestamp = Math.max(
-    ...historyMessages
-      // 只取用户消息且时间戳大于上次 reaction 时间
-      .filter(({ type, timestamp }) => type === "user" && timestamp > lastReactionTimestamp)
-      .map(({ timestamp }) => timestamp),
-    ...Object.entries(actionResponses)
-      // 只取时间戳大于上次 reaction 时间的 action response
-      .filter(([_, { timestamp }]) => timestamp > lastReactionTimestamp)
-      .map(([_, { timestamp }]) => timestamp)
+    ...userMessageTimestamps,
+    ...actionResponseTimestamps,
+    -Infinity
   );
 
   // 如果计算出的 timestamp 不大于 lastReactionTimestamp，说明没有新的输入，不需要 Reaction
@@ -60,19 +65,19 @@ const extractReplyToUserEffects = ({
 /**
  * 提取所有 RefineActionCallEffect
  *
- * 所有没有 parameters 的 action requests 都需要细化（可以并发）
+ * 所有没有 parameter 的 actions 都需要细化（可以并发）
  *
  * Effect 只包含 actionRequestId，其他数据在 runEffect 时从 state 中获取
  */
 const extractRefineActionCallEffects = (
   state: Immutable<AgentState>
 ): RefineActionCallEffect[] =>
-  Object.entries(state.actionRequests)
+  Object.entries(state.actions)
     .filter(
-      ([actionRequestId, request]) =>
-        !(actionRequestId in state.actionResponses) && // 如果已经有 response，跳过
-        !(actionRequestId in state.actionParameters) && // 如果没有 parameters，需要细化
-        state.actions[request.actionName] // 如果 action 定义不存在，跳过
+      ([actionRequestId, action]) =>
+        !action.response && // 如果已经有 response，跳过
+        !action.parameter && // 如果没有 parameter，需要细化
+        state.actionDefinitions[action.request.actionName] // 如果 action 定义不存在，跳过
     )
     .map(
       ([actionRequestId]): RefineActionCallEffect => ({
@@ -84,23 +89,21 @@ const extractRefineActionCallEffects = (
 /**
  * 提取所有 ActionRequestEffect
  *
- * 所有有 parameters 但没有 response 的 action requests 都需要执行（可以并发）
+ * 所有有 parameter 但没有 response 的 actions 都需要执行（可以并发）
  *
  * Effect 只包含 actionRequestId，其他数据在 runEffect 时从 state 中获取
  */
 const extractActionRequestEffects = ({
-  actionRequests,
-  actionResponses,
-  actionParameters,
+  actions,
 }: Immutable<AgentState>): ActionRequestEffect[] =>
-  Object.keys(actionRequests)
+  Object.entries(actions)
     .filter(
-      (actionRequestId) =>
-        !(actionRequestId in actionResponses) && // 如果已经有 response，跳过
-        actionRequestId in actionParameters // 如果有 parameters，需要执行
+      ([actionRequestId, action]) =>
+        !action.response && // 如果已经有 response，跳过
+        action.parameter !== null // 如果有 parameter，需要执行
     )
     .map(
-      (actionRequestId): ActionRequestEffect => ({
+      ([actionRequestId]): ActionRequestEffect => ({
         kind: "action-request",
         actionRequestId,
       })

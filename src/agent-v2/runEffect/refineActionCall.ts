@@ -18,16 +18,16 @@ const getActionRequestAndSchema = (
   parameterSchema: string;
   outputSchema: Record<string, unknown>;
 } => {
-  // 从 state 获取 action request
-  const request = state.actionRequests[actionRequestId];
-  if (!request) {
-    throw new Error(`Action request not found for actionRequestId: ${actionRequestId}`);
+  // 从 state 获取 action
+  const action = state.actions[actionRequestId];
+  if (!action) {
+    throw new Error(`Action not found for actionRequestId: ${actionRequestId}`);
   }
 
-  // 从 state.actions 中获取 action 的 parameter schema
-  const actionDef = state.actions[request.actionName];
+  // 从 state.actionDefinitions 中获取 action 的 parameter schema
+  const actionDef = state.actionDefinitions[action.request.actionName];
   if (!actionDef) {
-    throw new Error(`Action definition not found for actionName: ${request.actionName}`);
+    throw new Error(`Action definition not found for actionName: ${action.request.actionName}`);
   }
 
   const parameterSchema = actionDef.schema;
@@ -37,10 +37,14 @@ const getActionRequestAndSchema = (
   try {
     outputSchema = JSON.parse(parameterSchema);
   } catch {
-    throw new Error(`Invalid parameter schema JSON for actionName: ${request.actionName}`);
+    throw new Error(`Invalid parameter schema JSON for actionName: ${action.request.actionName}`);
   }
 
-  return { request, parameterSchema, outputSchema };
+  return { 
+    request: { actionName: action.request.actionName, intention: action.request.intention }, 
+    parameterSchema, 
+    outputSchema 
+  };
 };
 
 /**

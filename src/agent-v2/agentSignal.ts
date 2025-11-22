@@ -32,7 +32,7 @@ export const actionRequestRefinedSignalSchema = z.object({
 
 /**
  * Action Cancelled By User Signal Schema - 用户主动取消一个 Action Request
- * 注意：用户取消的 action 不会从 actionRequests 中移除，以便告知 LLM 这是用户主动取消的
+ * 注意：用户取消的 action 不会从 actions 中移除，只是更新 response 为 cancelled 类型，以便告知 LLM 这是用户主动取消的
  */
 export const actionCancelledByUserSignalSchema = z.object({
   kind: z.literal("action-cancelled-by-user"),

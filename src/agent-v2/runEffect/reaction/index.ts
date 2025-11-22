@@ -1,4 +1,4 @@
-import { partition, pickBy, keys } from "lodash";
+import { partition } from "lodash";
 import type { Immutable } from "mutative";
 import type { AgentState, HistoryMessage } from "../../agentState.ts";
 import type { ReactionEffect } from "../../agentEffects.ts";
@@ -34,17 +34,16 @@ const collectUnrespondedItems = (
   const lastReactionTimestamp = state.lastReactionTimestamp;
   
   // 收集尚未响应的用户消息（timestamp > lastReactionTimestamp）
-  const unrespondedUserMessages = state.historyMessages.filter(
-    (msg) => msg.type === "user" && msg.timestamp > lastReactionTimestamp,
-  );
+  const unrespondedUserMessages = state.historyMessages
+    .filter(({ type, timestamp }) => type === "user" && timestamp > lastReactionTimestamp);
 
   // 收集尚未响应的 action responses（timestamp > lastReactionTimestamp）
-  const unrespondedActionIds = keys(
-    pickBy(
-      state.actionResponses,
-      (response) => response.timestamp > lastReactionTimestamp,
-    ),
-  );
+  const unrespondedActionIds = Object.entries(state.actions)
+    .filter(
+      ([_, action]) =>
+        action.response && action.response.timestamp > lastReactionTimestamp,
+    )
+    .map(([id]) => id);
 
   return { unrespondedUserMessages, unrespondedActionIds };
 };
@@ -61,7 +60,7 @@ const getLastProcessedTimestamp = (
     (msg) => msg.timestamp,
   );
   const actionResponseTimestamps = reactionContext.unrespondedActionIds
-    .map((id) => state.actionResponses[id]?.timestamp)
+    .map((id) => state.actions[id]?.response?.timestamp)
     .filter((ts): ts is number => ts !== undefined);
 
   return Math.max(

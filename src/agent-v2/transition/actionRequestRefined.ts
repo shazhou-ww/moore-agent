@@ -6,31 +6,35 @@ import type { ActionRequestRefinedSignal } from "../agentSignal.ts";
  * 处理 action-request-refined 信号
  * 
  * Transition 效果：
- * - 将 action request 的参数添加到 actionParameters
- * - 注意：action request 本身已经在 reaction-complete 时创建，这里只是细化参数
+ * - 将 action 的 parameter 更新为细化后的参数
+ * - 注意：action 本身已经在 reaction-complete 时创建，这里只是细化参数
  */
 export const handleActionRequestRefined = (
   signal: Immutable<ActionRequestRefinedSignal>,
   state: Immutable<AgentState>,
 ): Immutable<AgentState> => {
-  // 检查 action request 是否存在
-  if (!(signal.actionRequestId in state.actionRequests)) {
+  // 检查 action 是否存在
+  const action = state.actions[signal.actionRequestId];
+  if (!action) {
     console.warn(
       `Ignoring action-request-refined signal for actionRequestId ${signal.actionRequestId}. ` +
-      `Action request does not exist.`
+      `Action does not exist.`
     );
     return state;
   }
 
-  // 更新 action parameters
-  const newActionParameters = {
-    ...state.actionParameters,
-    [signal.actionRequestId]: signal.parameters,
+  // 更新 action 的 parameter
+  const updatedActions = {
+    ...state.actions,
+    [signal.actionRequestId]: {
+      ...action,
+      parameter: signal.parameters,
+    },
   };
 
   return {
     ...state,
-    actionParameters: newActionParameters,
+    actions: updatedActions,
   };
 };
 

@@ -49,46 +49,54 @@ const handleAdjustActionsDecision = (
   timestamp: number,
   state: Immutable<AgentState>,
 ): Immutable<AgentState> => {
-  const { cancelActions, newActions } = decision;
+  const { cancelActions, newActions: newActionsToCreate } = decision;
   
   // 创建 mutable 的副本
-  const newActionRequests = { ...state.actionRequests };
-  const newActionResponses = { ...state.actionResponses };
+  const updatedActions = { ...state.actions };
   
-  // 处理 cancelActions：从 actionRequests 中删除，并添加 cancelled 类型的 response
+  // 处理 cancelActions：更新 response 为 cancelled 类型
   // 如果一个要 cancel 的 action 已经 respond 过了，那就忽略，不用 cancel 了
   for (const actionRequestId of cancelActions) {
     // 如果该 action 已经有 response，忽略 cancel 操作
-    if (actionRequestId in state.actionResponses) {
+    const action = updatedActions[actionRequestId];
+    if (action && action.response) {
       continue;
     }
     
-    // 从 actionRequests 中删除
-    delete newActionRequests[actionRequestId];
+    // 如果 action 不存在，跳过
+    if (!action) {
+      continue;
+    }
     
-    // 添加 cancelled 类型的 response
-    newActionResponses[actionRequestId] = {
-      type: "cancelled" as const,
-      timestamp,
+    // 更新 response 为 cancelled 类型
+    updatedActions[actionRequestId] = {
+      ...action,
+      response: {
+        type: "cancelled" as const,
+        timestamp,
+      },
     };
   }
   
-  // 处理 newActions：创建新的 action requests
-  // 这些 action requests 会通过后续的 RefineActionCallEffect 细化参数
-  // 注意：不初始化 actionParameters，缺失的 parameters 可以提示需要对应的 refine effect
-  for (const newAction of newActions) {
-    // 创建新的 action request（不包含 parameters，parameters 单独存储）
-    newActionRequests[newAction.actionRequestId] = {
-      actionName: newAction.actionName,
-      intention: newAction.initialIntent,
-      timestamp,
+  // 处理 newActions：创建新的 actions
+  // 这些 actions 会通过后续的 RefineActionCallEffect 细化参数
+  // 注意：不初始化 parameter，缺失的 parameter 可以提示需要对应的 refine effect
+  for (const newAction of newActionsToCreate) {
+    // 创建新的 action（不包含 parameter，parameter 通过 refine effect 添加）
+    updatedActions[newAction.actionRequestId] = {
+      request: {
+        actionName: newAction.actionName,
+        intention: newAction.initialIntent,
+        timestamp,
+      },
+      response: null,
+      parameter: null,
     };
   }
   
   return {
     ...state,
-    actionRequests: newActionRequests,
-    actionResponses: newActionResponses,
+    actions: updatedActions,
     lastReactionTimestamp: timestamp,
   };
 };

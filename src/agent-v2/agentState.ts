@@ -34,6 +34,15 @@ export const actionResponseSchema = z.discriminatedUnion("type", [
 ]);
 
 /**
+ * Action Schema - 合并 ActionRequest、ActionResponse 和 parameters
+ */
+export const actionSchema = z.object({
+  request: actionRequestSchema,
+  response: actionResponseSchema.nullable(),
+  parameter: z.string().nullable(),
+});
+
+/**
  * 历史消息 Schema
  */
 export const historyMessageSchema = z.object({
@@ -69,24 +78,19 @@ export const agentStateSchema = z.object({
   systemPrompts: z.string(),
 
   // 2. 当前 Agent 的 Action 定义
-  actions: z.record(z.string(), actionDefinitionSchema),
+  actionDefinitions: z.record(z.string(), actionDefinitionSchema),
 
-  // 3. 当前 Agent 已经发起的 action requests（不包含 parameters）
-  actionRequests: z.record(z.string(), actionRequestSchema),
+  // 3. 当前 Agent 已经发起的 actions（合并了 request、response 和 parameter）
+  // key 是 actionRequestId，value 是 Action
+  actions: z.record(z.string(), actionSchema),
 
-  // 4. Action 请求的参数（JSON 字符串），key 是 actionRequestId
-  actionParameters: z.record(z.string(), z.string()),
-
-  // 5. 当前 Agent 已经完成的 action request 的结果
-  actionResponses: z.record(z.string(), actionResponseSchema),
-
-  // 6. Agent 和用户之间往来的历史消息（不包含 Agent 和 action 之间的消息）
+  // 4. Agent 和用户之间往来的历史消息（不包含 Agent 和 action 之间的消息）
   historyMessages: z.array(historyMessageSchema),
 
-  // 7. 最近一次收到 reaction 结果的时间戳
+  // 5. 最近一次收到 reaction 结果的时间戳
   lastReactionTimestamp: z.number(),
 
-  // 8. 正在进行的 reply to user streaming 操作
+  // 6. 正在进行的 reply to user streaming 操作
   // key 是 messageId（即 hash(lastHistoryMessageId + sorted actionIds)），value 是对应的 context
   // 这与 ReplyToUserEffect 的 key 保持一致
   replies: z.record(z.string(), replyToUserContextSchema),
@@ -108,6 +112,11 @@ export type ActionRequest = z.infer<typeof actionRequestSchema>;
  * Action 响应详情
  */
 export type ActionResponse = z.infer<typeof actionResponseSchema>;
+
+/**
+ * Action - 合并 ActionRequest、ActionResponse 和 parameter
+ */
+export type Action = z.infer<typeof actionSchema>;
 
 /**
  * 历史消息

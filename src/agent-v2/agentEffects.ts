@@ -45,20 +45,19 @@ export type ReplyToUserEffect = {
  * 
  * 用途：
  * - 当确定了需要调用某个 action 后，进一步细化调用参数
- * - 结合历史消息、action responses 等上下文，生成具体的 action request
+ * - 结合历史消息、action responses 等上下文，生成具体的 action parameter
  * 
  * 输入（从 state 中获取）：
- * - 目标 action 的定义：state.actions[request.actionName]
- * - 初始意图：state.actionRequests[actionRequestId].intention
- * - 相关上下文：state.historyMessages、state.actionResponses 等
+ * - 目标 action 的定义：state.actionDefinitions[action.request.actionName]
+ * - 初始意图：state.actions[actionRequestId].request.intention
+ * - 相关上下文：state.historyMessages、state.actions 等
  * 
  * 输出：
- * - 结构化的 action request（actionName, parameters, intention）
- *   其中 intention 是 LLM 根据上下文和初始意图理解生成的
+ * - 细化的 action parameter（JSON 字符串）
  */
 export type RefineActionCallEffect = {
   kind: "refine-action-call";
-  // actionRequestId 用于从 state.actionRequests 中查找对应的 action request
+  // actionRequestId 用于从 state.actions 中查找对应的 action
   actionRequestId: string;
 };
 
@@ -68,12 +67,13 @@ export type RefineActionCallEffect = {
  * 注意：这个 effect 通常由 RefineActionCallEffect 的结果触发，表示已经细化完成，可以直接执行
  * 
  * 输入（从 state 中获取）：
- * - action request 信息：state.actionRequests[actionRequestId]
- * - action parameters：state.actionParameters[actionRequestId]
+ * - action 信息：state.actions[actionRequestId]
+ *   - request：action.request
+ *   - parameter：action.parameter
  */
 export type ActionRequestEffect = {
   kind: "action-request";
-  // actionRequestId 用于从 state.actionRequests 和 state.actionParameters 中查找对应的数据
+  // actionRequestId 用于从 state.actions 中查找对应的 action
   actionRequestId: string;
 };
 
