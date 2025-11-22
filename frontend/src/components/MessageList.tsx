@@ -1,4 +1,5 @@
 import { Box, List, ListItem } from "@mui/material";
+import { useEffect, useRef } from "react";
 import { MessageItem } from "./MessageItem.tsx";
 import type { HistoryMessage, UserMessage, AgentState } from "../types.ts";
 import type { FrozenJson } from "@hstore/core";
@@ -65,8 +66,28 @@ export const MessageList = ({ state, pendingMessages }: MessageListProps) => {
     ...pendingDisplayMessages,
   ].sort((a, b) => a.timestamp - b.timestamp);
 
+  // 滚动容器引用
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // 自动滚动到底部 - 当消息更新时自动滚动
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (container) {
+      // 使用 requestAnimationFrame 确保在 DOM 更新后滚动
+      requestAnimationFrame(() => {
+        container.scrollTop = container.scrollHeight;
+      });
+    }
+    // 依赖：消息 ID 列表和流式消息总长度（用于实时更新流式内容）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    allMessages.map((m) => m.id).join(","),
+    streamingMessages.reduce((sum, m) => sum + m.content.length, 0),
+  ]);
+
   return (
     <Box
+      ref={scrollContainerRef}
       sx={{
         flex: 1,
         overflowY: "auto",
