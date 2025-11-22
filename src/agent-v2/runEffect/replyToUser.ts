@@ -1,5 +1,6 @@
+import { findLastIndex, pick } from "lodash";
 import type { Immutable } from "mutative";
-import type { AgentState, HistoryMessage } from "../agentState.ts";
+import type { AgentState, HistoryMessage, Action } from "../agentState.ts";
 import type { ReplyToUserEffect } from "../agentEffects.ts";
 import type {
   AgentSignal,
@@ -17,60 +18,34 @@ import { now } from "../../utils/time.ts";
 const getRelatedHistoryMessages = (
   state: Immutable<AgentState>,
   lastHistoryMessageId: string
-): HistoryMessage[] => {
-  const relatedHistoryMessages: HistoryMessage[] = [];
-  let foundLastMessage = false;
+): Immutable<HistoryMessage[]> => {
+  // 从后往前找到 lastHistoryMessageId 的索引
+  const lastIndex = findLastIndex(
+    state.historyMessages,
+    (msg) => msg.id === lastHistoryMessageId
+  );
 
-  // 从后往前遍历，找到 lastHistoryMessageId，然后收集从起点到它的所有消息
-  for (let i = state.historyMessages.length - 1; i >= 0; i--) {
-    const msg = state.historyMessages[i]!;
-    if (msg.id === lastHistoryMessageId) {
-      foundLastMessage = true;
-    }
-    if (foundLastMessage) {
-      relatedHistoryMessages.unshift(msg);
-    }
-  }
-
-  // 如果找不到 lastHistoryMessageId，使用所有历史消息作为后备
-  if (!foundLastMessage) {
-    relatedHistoryMessages.push(...state.historyMessages);
-  }
-
-  return relatedHistoryMessages;
+  // 如果找到了，返回从起点到该索引的所有消息；否则返回所有消息
+  return lastIndex >= 0
+    ? state.historyMessages.slice(0, lastIndex + 1)
+    : state.historyMessages;
 };
 
 /**
- * 处理 chunks 迭代
+ * 发送 chunk 接收信号
  */
-const processChunks = async (
-  chunkIterator: AsyncIterator<string>,
+const dispatchChunkReceived = (
   messageId: string,
-  sendUserMessageChunk: (messageId: string, chunk: string) => void,
-  dispatch: Dispatch,
-  isCancelled: () => boolean
-): Promise<void> => {
-  while (true) {
-    const { done, value } = await chunkIterator.next();
-    if (done) {
-      break;
-    }
-    if (isCancelled()) {
-      return;
-    }
-    
-    // 直接调用回调
-    sendUserMessageChunk(messageId, value);
-
-    // dispatch assistant-chunk-received 信号
-    const chunkSignal: AssistantChunkReceivedSignal = {
-      kind: "assistant-chunk-received",
-      messageId,
-      chunk: value,
-      timestamp: now(),
-    };
-    dispatch(chunkSignal as Immutable<AgentSignal>);
-  }
+  chunk: string,
+  dispatch: Dispatch
+): void => {
+  const chunkSignal: AssistantChunkReceivedSignal = {
+    kind: "assistant-chunk-received",
+    messageId,
+    chunk,
+    timestamp: now(),
+  };
+  dispatch(chunkSignal as Immutable<AgentSignal>);
 };
 
 /**
@@ -126,23 +101,28 @@ export const createReplyToUserEffectInitializer = (
         replyContext.lastHistoryMessageId
       );
 
+      // 收集相关的 actions
+      const relatedActions = pick(
+        state.actions,
+        replyContext.relatedActionIds
+      ) as Record<string, Action>;
+
       // 调用流式 LLM（speak）：向用户解释说明
-      const chunkIterator = await speak(
+      const chunkGenerator = await speak(
         state.systemPrompts,
-        Array.from(relatedHistoryMessages)
+        Array.from(relatedHistoryMessages),
+        relatedActions
       );
+      for await (const chunk of chunkGenerator) {
+        if (isCancelled()) {
+          return;
+        }
+        
+        // 调用回调
+        sendUserMessageChunk(messageId, chunk);
 
-      // 处理 chunks
-      await processChunks(
-        chunkIterator,
-        messageId,
-        sendUserMessageChunk,
-        dispatch,
-        isCancelled
-      );
-
-      if (isCancelled()) {
-        return;
+        // dispatch assistant-chunk-received 信号
+        dispatchChunkReceived(messageId, chunk, dispatch);
       }
 
       // 完成回复消息

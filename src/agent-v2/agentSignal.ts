@@ -77,7 +77,6 @@ export const adjustActionsDecisionSchema = z.object({
   type: z.literal("adjust-actions"),
   cancelActions: z.array(z.string()), // actionRequestIds 需要取消的
   newActions: z.array(z.object({
-    actionRequestId: z.string(), // action request id
     actionName: z.string(),
     initialIntent: z.string(), // 初始意图，用于后续 RefineActionCallEffect
   })),
@@ -102,13 +101,42 @@ export const reactionDecisionSchema = z.discriminatedUnion("type", [
 ]);
 
 /**
+ * Reply To User Decision Schema Ext - 带 messageId 的回复用户决策
+ */
+export const replyToUserDecisionExtSchema = replyToUserDecisionSchema.extend({
+  messageId: z.string(), // 注入生成的 messageId
+});
+
+/**
+ * Adjust Actions Decision Schema Ext - 带 actionRequestId 的调整 actions 决策
+ */
+export const adjustActionsDecisionExtSchema = z.object({
+  type: z.literal("adjust-actions"),
+  cancelActions: z.array(z.string()), // actionRequestIds 需要取消的
+  newActions: z.array(z.object({
+    actionRequestId: z.string(), // 注入生成的 actionRequestId
+    actionName: z.string(),
+    initialIntent: z.string(), // 初始意图，用于后续 RefineActionCallEffect
+  })),
+});
+
+/**
+ * Reaction Decision Schema Ext - 带注入 id 的决策结果
+ */
+export const reactionDecisionExtSchema = z.discriminatedUnion("type", [
+  replyToUserDecisionExtSchema,
+  adjustActionsDecisionExtSchema,
+  noopDecisionSchema,
+]);
+
+/**
  * Reaction Complete Signal Schema - Reaction Effect 完成
  * Reaction 是基于最近的输入（user message 或 action responses）让 LLM 做下一步动作的规划
  * Reaction 是 non-streaming 的，直接返回决策结果
  */
 export const reactionCompleteSignalSchema = z.object({
   kind: z.literal("reaction-complete"),
-  decision: reactionDecisionSchema,
+  decision: reactionDecisionExtSchema,
   timestamp: z.number(),
 });
 
@@ -182,14 +210,29 @@ export type ReactionCompleteSignal = z.infer<
 export type ReactionDecision = z.infer<typeof reactionDecisionSchema>;
 
 /**
+ * Reaction Decision Ext - 带注入 id 的决策结果
+ */
+export type ReactionDecisionExt = z.infer<typeof reactionDecisionExtSchema>;
+
+/**
  * Reply To User Decision - 回复用户的决策
  */
 export type ReplyToUserDecision = z.infer<typeof replyToUserDecisionSchema>;
 
 /**
+ * Reply To User Decision Ext - 带 messageId 的回复用户决策
+ */
+export type ReplyToUserDecisionExt = z.infer<typeof replyToUserDecisionExtSchema>;
+
+/**
  * Adjust Actions Decision - 调整 actions 的决策
  */
 export type AdjustActionsDecision = z.infer<typeof adjustActionsDecisionSchema>;
+
+/**
+ * Adjust Actions Decision Ext - 带 actionRequestId 的调整 actions 决策
+ */
+export type AdjustActionsDecisionExt = z.infer<typeof adjustActionsDecisionExtSchema>;
 
 /**
  * Noop Decision - 无需操作的决策

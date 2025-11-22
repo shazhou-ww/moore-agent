@@ -1,5 +1,5 @@
 import type { Immutable } from "mutative";
-import type { HistoryMessage } from "../agentState.ts";
+import type { HistoryMessage, Action } from "../agentState.ts";
 import type { AgentSignal } from "../agentSignal.ts";
 
 /**
@@ -39,7 +39,8 @@ export type ThinkFn = (
 export type SpeakFn = (
   systemPrompts: string,
   messageWindow: HistoryMessage[],
-) => Promise<AsyncIterator<string>>;
+  relatedActions: Record<string, Action>, // 相关的 actions，key 是 actionRequestId
+) => Promise<AsyncGenerator<string>>;
 
 /**
  * 调用 Action 函数类型（act）

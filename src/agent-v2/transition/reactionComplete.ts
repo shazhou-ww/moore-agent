@@ -1,26 +1,21 @@
 import type { Immutable } from "mutative";
 import type { AgentState, ReplyToUserContext } from "../agentState.ts";
-import type { ReactionCompleteSignal, ReplyToUserDecision, AdjustActionsDecision } from "../agentSignal.ts";
-import { computeReplyKey } from "./utils.ts";
+import type { ReactionCompleteSignal, ReplyToUserDecisionExt, AdjustActionsDecisionExt } from "../agentSignal.ts";
 
 /**
  * 处理 reply-to-user 决策
  */
 const handleReplyToUserDecision = (
-  decision: Immutable<ReplyToUserDecision>,
+  decision: Immutable<ReplyToUserDecisionExt>,
   timestamp: number,
   state: Immutable<AgentState>,
 ): Immutable<AgentState> => {
-  const { lastHistoryMessageId, relatedActionIds } = decision;
+  const { messageId, lastHistoryMessageId, relatedActionIds } = decision;
   
-  // 先对 Action Ids 进行排序，确保 hash 计算的一致性
+  // 先对 Action Ids 进行排序
   const sortedActionIds = [...relatedActionIds].sort();
   
-  // messageId 就是 hash(lastHistoryMessageId + sorted actionIds)
-  // 这与 ReplyToUserEffect 的 key 保持一致
-  const messageId = computeReplyKey(lastHistoryMessageId, sortedActionIds);
-  
-  // 创建 reply context
+  // 创建 reply context（使用 signal 带来的 messageId）
   const replyContext: ReplyToUserContext = {
     messageId,
     lastHistoryMessageId,
@@ -45,7 +40,7 @@ const handleReplyToUserDecision = (
  * 处理 adjust-actions 决策
  */
 const handleAdjustActionsDecision = (
-  decision: Immutable<AdjustActionsDecision>,
+  decision: Immutable<AdjustActionsDecisionExt>,
   timestamp: number,
   state: Immutable<AgentState>,
 ): Immutable<AgentState> => {
@@ -78,7 +73,7 @@ const handleAdjustActionsDecision = (
     };
   }
   
-  // 处理 newActions：创建新的 actions
+  // 处理 newActions：创建新的 actions（使用 signal 带来的 actionRequestId）
   // 这些 actions 会通过后续的 RefineActionCallEffect 细化参数
   // 注意：不初始化 parameter，缺失的 parameter 可以提示需要对应的 refine effect
   for (const newAction of newActionsToCreate) {

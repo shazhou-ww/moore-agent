@@ -6,6 +6,7 @@ import type {
   AgentSignal,
   ReactionCompleteSignal,
   ReactionDecision,
+  ReactionDecisionExt,
 } from "../../agentSignal.ts";
 import type { EffectInitializer, RunEffectOptions, ThinkFn } from "../types.ts";
 import type { Dispatch } from "../effectInitializer.ts";
@@ -16,6 +17,7 @@ import {
 } from "./toolSchema.ts";
 import { toJSONSchema } from "zod";
 import { buildSystemPrompt } from "./prompt.ts";
+import { v4 as randomUUID } from "uuid";
 
 /**
  * Reaction 上下文
@@ -198,6 +200,31 @@ const handleIterationDecision = (
 };
 
 /**
+ * 将 ReactionDecision 转换为 ReactionDecisionExt，注入生成的 id
+ */
+const injectDecisionIds = (decision: ReactionDecision): ReactionDecisionExt => {
+  if (decision.type === "reply-to-user") {
+    // 为 reply-to-user 生成 messageId
+    return {
+      ...decision,
+      messageId: randomUUID(),
+    };
+  } else if (decision.type === "adjust-actions") {
+    // 为 adjust-actions 的每个 newAction 生成 actionRequestId
+    return {
+      ...decision,
+      newActions: decision.newActions.map((action) => ({
+        ...action,
+        actionRequestId: randomUUID(),
+      })),
+    };
+  } else {
+    // noop 不需要注入 id
+    return decision;
+  }
+};
+
+/**
  * 发送决策结果信号
  */
 const dispatchReactionComplete = (
@@ -207,9 +234,11 @@ const dispatchReactionComplete = (
   dispatch: Dispatch,
 ): void => {
   const timestamp = getLastProcessedTimestamp(state, reactionContext);
+  // 注入生成的 id
+  const decisionExt = injectDecisionIds(decision);
   const signal: ReactionCompleteSignal = {
     kind: "reaction-complete",
-    decision,
+    decision: decisionExt,
     timestamp,
   };
   dispatch(signal as Immutable<AgentSignal>);
