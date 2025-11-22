@@ -100,11 +100,17 @@ const buildHistoryInfo = (
   totalMessages: number,
   currentMessages: number,
   funcName: string,
-): string => {
+): { info: string; hasMoreHistory: boolean } => {
   if (totalMessages <= currentMessages) {
-    return "";
+    return {
+      info: `\nNote: All ${totalMessages} messages are currently loaded. There are no more history messages available.`,
+      hasMoreHistory: false,
+    };
   }
-  return `\nNote: Currently showing only the last ${currentMessages} messages, with ${totalMessages - currentMessages} messages not loaded. If you need more history messages, you can call the ${funcName} function with { type: "more-history" }.`;
+  return {
+    info: `\nNote: Currently showing only the last ${currentMessages} messages, with ${totalMessages - currentMessages} messages not loaded. If you need more history messages, you can call the ${funcName} function with { type: "more-history" }.`,
+    hasMoreHistory: true,
+  };
 };
 
 /**
@@ -123,7 +129,16 @@ export const buildSystemPrompt = (
 
   const totalMessages = state.historyMessages.length;
   const currentMessages = iterationState.currentHistoryCount;
-  const historyInfo = buildHistoryInfo(totalMessages, currentMessages, funcName);
+  const { info: historyInfo, hasMoreHistory } = buildHistoryInfo(totalMessages, currentMessages, funcName);
+
+  // 根据是否有更多 history 构建示例部分
+  const moreHistoryExample = hasMoreHistory
+    ? `Get more history messages:
+
+${codeBlockJson({ type: "more-history" })}
+
+`
+    : "";
 
   return `## Reaction Decision Task
 
@@ -136,22 +151,32 @@ ${actionsList}
 ${actionSummariesText || "(none)"}
 ${historyInfo}
 
-### Decision Options:
-1. **noop**: Nothing needs to be done
-2. **reply-to-user**: You have completed the necessary actions, collected sufficient information, and need to respond to the user
-3. **adjust-actions**: Adjust actions based on context analysis:
+### Decision Options (in priority order):
+
+**1. reply-to-user** (DEFAULT - Use this unless you clearly need more information):
+You should respond to the user when you have sufficient information to provide a meaningful response. This is the default action - you should reply to the user unless there is a clear information gap that prevents you from doing so.
+
+**2. adjust-actions** (Only when there is a clear information gap):
+Adjust actions only when you have identified a specific information gap that requires additional actions:
    - **Cancel actions**: Cancel running actions that are no longer needed based on the current context
-   - **Add actions**: Create new actions that are needed to supplement the current task based on context analysis
+   - **Add actions**: Create new actions that are needed to supplement the current task when there is a clear information gap
+
+**3. noop** (Last resort - Only when information is missing but current actions are sufficient):
+Use noop only when:
+   - There is an information gap that prevents immediate reply
+   - BUT the currently executing actions are already sufficient to address this gap
+   - You are waiting for those actions to complete before you can reply
+
+**Decision Priority:**
+- **Default to reply-to-user** unless you clearly identify missing information
+- Only consider adjust-actions when there is a clear information gap that requires new actions
+- Only consider noop when information is missing but current actions are already handling it
 
 Please call the ${funcName} function to make a decision. Examples:
 
 **To get more information:**
 
-Get more history messages:
-
-${codeBlockJson({ type: "more-history" })}
-
-Get details for specific actions:
+${moreHistoryExample}Get details for specific actions:
 
 ${codeBlockJson({ 
   type: "action-detail", 
@@ -160,14 +185,7 @@ ${codeBlockJson({
 
 **To make a final decision:**
 
-No action needed:
-
-${codeBlockJson({ 
-  type: "decision-made", 
-  decision: { type: "noop" } 
-})}
-
-Reply to the user:
+Reply to the user (DEFAULT - use this in most cases):
 
 ${codeBlockJson({ 
   type: "decision-made", 
@@ -178,7 +196,7 @@ ${codeBlockJson({
   } 
 })}
 
-Adjust actions based on context analysis:
+Adjust actions (only when there is a clear information gap):
 
 Cancel running actions that are no longer needed, and add new actions that are required:
 
@@ -195,6 +213,13 @@ ${codeBlockJson({
       }
     ] 
   } 
+})}
+
+No action needed (only when information is missing but current actions are sufficient):
+
+${codeBlockJson({ 
+  type: "decision-made", 
+  decision: { type: "noop" } 
 })}
 
 ---

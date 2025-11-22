@@ -22,11 +22,13 @@ export const createThinkFn = (model: LargeLanguageModel): ThinkFn => {
     outputSchema: Record<string, unknown>,
   ): Promise<string> => {
     log("Calling think model:", model.model);
-    log("Message window size:", messageWindow.length);
+    log("message window:", messageWindow);
+
 
     try {
       // 构建消息列表
       const systemPrompt = getSystemPrompts("think");
+      // log("System prompt:\n\n", systemPrompt);
       const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = compact([
         systemPrompt && {
           role: "system",
@@ -59,7 +61,7 @@ export const createThinkFn = (model: LargeLanguageModel): ThinkFn => {
         throw new Error("Empty response from think model");
       }
 
-      log("Think model response received");
+      log("Think model response received, content:\n\n", content);
       return content;
     } catch (error) {
       log("Think model call failed:", error);

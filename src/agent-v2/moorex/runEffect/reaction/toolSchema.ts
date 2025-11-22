@@ -20,3 +20,36 @@ export const iterationDecisionSchema = z.discriminatedUnion("type", [
 
 export type IterationDecision = z.infer<typeof iterationDecisionSchema>;
 
+/**
+ * 根据是否有更多 history 动态生成迭代决策 Schema
+ */
+export const createIterationDecisionSchema = (
+  hasMoreHistory: boolean,
+) => {
+  const decisionMadeOption = z.object({
+    type: z.literal("decision-made"),
+    decision: reactionDecisionSchema,
+  });
+
+  const actionDetailOption = z.object({
+    type: z.literal("action-detail"),
+    ids: z.array(z.string()),
+  });
+
+  if (hasMoreHistory) {
+    const moreHistoryOption = z.object({
+      type: z.literal("more-history"),
+    });
+    return z.discriminatedUnion("type", [
+      decisionMadeOption,
+      moreHistoryOption,
+      actionDetailOption,
+    ]);
+  } else {
+    return z.discriminatedUnion("type", [
+      decisionMadeOption,
+      actionDetailOption,
+    ]);
+  }
+};
+

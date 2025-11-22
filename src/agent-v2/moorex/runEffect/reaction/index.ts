@@ -13,6 +13,7 @@ import type { Dispatch } from "../effectInitializer.ts";
 import { createEffectInitializer } from "../effectInitializer.ts";
 import {
   iterationDecisionSchema,
+  createIterationDecisionSchema,
   type IterationDecision,
 } from "./toolSchema.ts";
 import { toJSONSchema } from "zod";
@@ -132,7 +133,6 @@ const prepareIterationContext = (
   return { getSystemPrompts, messageWindow };
 };
 
-const iterationDecisionOutputSchema = toJSONSchema(iterationDecisionSchema);
 /**
  * 调用 think 进行一轮决策
  */
@@ -140,7 +140,12 @@ const performIterationDecision = async (
   getSystemPrompts: (funcName: string) => string,
   messageWindow: HistoryMessage[],
   think: ThinkFn,
+  hasMoreHistory: boolean,
 ): Promise<IterationDecision> => {
+  // 根据是否有更多 history 动态生成 schema
+  const dynamicSchema = createIterationDecisionSchema(hasMoreHistory);
+  const iterationDecisionOutputSchema = toJSONSchema(dynamicSchema);
+
   // 调用 LLM（think）：思考下一步决策
   const result = await think(
     getSystemPrompts,
@@ -150,7 +155,7 @@ const performIterationDecision = async (
 
   // 解析 LLM 返回的结果
   const parsed = JSON.parse(result);
-  return iterationDecisionSchema.parse(parsed);
+  return dynamicSchema.parse(parsed);
 };
 
 /**
@@ -169,6 +174,7 @@ const handleIterationDecision = (
   decideCall: IterationDecision,
   iterationState: IterationState,
   additionalHistoryCount: number,
+  totalMessages: number,
 ): IterationState => {
   if (decideCall.type === "decision-made") {
     return {
@@ -176,6 +182,14 @@ const handleIterationDecision = (
       decision: decideCall.decision,
     };
   } else if (decideCall.type === "more-history") {
+    // 检查是否还有更多 history
+    if (iterationState.currentHistoryCount >= totalMessages) {
+      // 已经没有更多 history 了，返回 noop 决策
+      return {
+        ...iterationState,
+        decision: { type: "noop" },
+      };
+    }
     // 追溯更多历史消息
     return {
       ...iterationState,
@@ -292,6 +306,7 @@ export const createReactionEffectInitializer = (
       };
 
       // 循环决策，直到做出最终决策
+      const totalMessages = state.historyMessages.length;
       while (iterationState.decision === null) {
         // 1. 准备系统提示词和消息窗口
         const { getSystemPrompts: getSystemPrompt, messageWindow } = prepareIterationContext(
@@ -299,11 +314,15 @@ export const createReactionEffectInitializer = (
           iterationState,
         );
 
+        // 检查是否还有更多 history
+        const hasMoreHistory = iterationState.currentHistoryCount < totalMessages;
+
         // 2. 调用 think，进行一轮决策
         const decideCall = await performIterationDecision(
           getSystemPrompt,
           messageWindow,
-          think
+          think,
+          hasMoreHistory,
         );
 
         if (isCancelled()) {
@@ -315,6 +334,7 @@ export const createReactionEffectInitializer = (
           decideCall,
           iterationState,
           additionalHistoryCount,
+          totalMessages,
         );
       }
 
