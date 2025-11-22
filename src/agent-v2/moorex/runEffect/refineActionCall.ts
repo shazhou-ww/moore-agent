@@ -5,7 +5,7 @@ import type { AgentSignal, ActionRequestRefinedSignal } from "../agentSignal.ts"
 import type { EffectInitializer, RunEffectOptions } from "./types.ts";
 import type { Dispatch } from "./effectInitializer.ts";
 import { createEffectInitializer } from "./effectInitializer.ts";
-import { now } from "../../utils/time.ts";
+import { now } from "../../../utils/time.ts";
 
 /**
  * 解析 JSON Schema 字符串为对象

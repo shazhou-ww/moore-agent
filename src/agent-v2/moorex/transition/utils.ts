@@ -1,5 +1,4 @@
 import type { HistoryMessage } from "../agentState.ts";
-import { createHash } from "crypto";
 
 /**
  * 将消息追加到 historyMessages 的末尾
@@ -34,18 +33,5 @@ export const appendHistoryMessage = (
   );
   
   return null;
-};
-
-/**
- * 计算 reply key: hash(lastHistoryMessageId + sorted actionIds)
- */
-export const computeReplyKey = (
-  lastHistoryMessageId: string,
-  relatedActionIds: string[],
-): string => {
-  // 排序 actionIds 以确保一致性
-  const sortedActionIds = [...relatedActionIds].sort();
-  const input = `${lastHistoryMessageId}:${sortedActionIds.join(",")}`;
-  return createHash("sha256").update(input).digest("hex");
 };
 

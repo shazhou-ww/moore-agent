@@ -97,16 +97,6 @@ const handleAdjustActionsDecision = (
 };
 
 /**
- * 处理 reaction-complete 信号
- * 
- * Transition 效果：
- * - Reaction 是 non-streaming 的，直接返回决策结果
- * - 根据决策结果处理：
- *   - 如果是 reply-to-user：添加到 replies（等待后续的 ReplyToUserEffect 触发 streaming）
- *   - 如果是 adjust-actions：直接调整 action requests
- * - 更新 lastReactionTimestamp 为 signal.timestamp
- */
-/**
  * 处理 noop 决策
  */
 const handleNoopDecision = (

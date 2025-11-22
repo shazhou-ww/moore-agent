@@ -10,7 +10,7 @@ import type {
 import type { EffectInitializer, RunEffectOptions } from "./types.ts";
 import type { Dispatch } from "./effectInitializer.ts";
 import { createEffectInitializer } from "./effectInitializer.ts";
-import { now } from "../../utils/time.ts";
+import { now } from "../../../utils/time.ts";
 
 /**
  * 收集相关的历史消息（从第一条消息到 lastHistoryMessageId 的所有消息）
