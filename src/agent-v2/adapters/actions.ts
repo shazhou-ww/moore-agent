@@ -8,14 +8,14 @@ import type { ActionWithRun } from "../types.ts";
 export const createActFn = (
   actions: Record<string, ActionWithRun>,
 ): ActFn => {
-  return async (actionName: string, parameters: string): Promise<string> => {
+  return async (actionId: string, actionName: string, parameters: string): Promise<string> => {
     const action = get(actions, actionName);
     if (!action) {
       throw new Error(`Action not found: ${actionName}`);
     }
 
     try {
-      return await action.run(parameters);
+      return await action.run(actionId, parameters);
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);

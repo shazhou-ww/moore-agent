@@ -39,13 +39,14 @@ export type ThinkFn = (
 export type SpeakFn = (
   systemPrompts: string,
   messageWindow: HistoryMessage[],
-  relatedActions: Record<string, Action>, // 相关的 actions，key 是 actionRequestId
+  relatedActions: Record<string, Action>, // 相关的 actions，key 是 actionId
 ) => Promise<AsyncGenerator<string>>;
 
 /**
  * 调用 Action 函数类型（act）
  */
 export type ActFn = (
+  actionId: string,
   actionName: string,
   parameters: string, // JSON 字符串
 ) => Promise<string>; // 返回结果字符串

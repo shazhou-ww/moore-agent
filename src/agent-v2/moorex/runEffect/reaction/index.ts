@@ -210,12 +210,12 @@ const injectDecisionIds = (decision: ReactionDecision): ReactionDecisionExt => {
       messageId: randomUUID(),
     };
   } else if (decision.type === "adjust-actions") {
-    // 为 adjust-actions 的每个 newAction 生成 actionRequestId
+    // 为 adjust-actions 的每个 newAction 生成 actionId
     return {
       ...decision,
       newActions: decision.newActions.map((action) => ({
         ...action,
-        actionRequestId: randomUUID(),
+        actionId: randomUUID(),
       })),
     };
   } else {

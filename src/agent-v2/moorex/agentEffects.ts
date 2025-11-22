@@ -49,7 +49,7 @@ export type ReplyToUserEffect = {
  * 
  * 输入（从 state 中获取）：
  * - 目标 action 的定义：state.actionDefinitions[action.request.actionName]
- * - 初始意图：state.actions[actionRequestId].request.intention
+ * - 初始意图：state.actions[actionId].request.intention
  * - 相关上下文：state.historyMessages、state.actions 等
  * 
  * 输出：
@@ -57,8 +57,8 @@ export type ReplyToUserEffect = {
  */
 export type RefineActionCallEffect = {
   kind: "refine-action-call";
-  // actionRequestId 用于从 state.actions 中查找对应的 action
-  actionRequestId: string;
+  // actionId 用于从 state.actions 中查找对应的 action
+  actionId: string;
 };
 
 /**
@@ -67,14 +67,14 @@ export type RefineActionCallEffect = {
  * 注意：这个 effect 通常由 RefineActionCallEffect 的结果触发，表示已经细化完成，可以直接执行
  * 
  * 输入（从 state 中获取）：
- * - action 信息：state.actions[actionRequestId]
+ * - action 信息：state.actions[actionId]
  *   - request：action.request
  *   - parameter：action.parameter
  */
 export type ActionRequestEffect = {
   kind: "action-request";
-  // actionRequestId 用于从 state.actions 中查找对应的 action
-  actionRequestId: string;
+  // actionId 用于从 state.actions 中查找对应的 action
+  actionId: string;
 };
 
 /**

@@ -23,7 +23,7 @@ export type LargeLanguageModel = {
  * Action 定义（包含 run 函数）
  */
 export type ActionWithRun = ActionDefinition & {
-  run: (params: string) => Promise<string>;
+  run: (actionId: string, params: string) => Promise<string>;
 };
 
 /**

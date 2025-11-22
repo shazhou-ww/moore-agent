@@ -72,13 +72,13 @@ const parseRefinedParameters = (result: string): string => {
  * 发送 action request refined 信号
  */
 const dispatchActionRequestRefined = (
-  actionRequestId: string,
+  actionId: string,
   parameters: string,
   dispatch: Dispatch,
 ): void => {
   const signal: ActionRequestRefinedSignal = {
     kind: "action-request-refined",
-    actionRequestId,
+    actionId,
     parameters,
     timestamp: Date.now(),
   };
@@ -100,12 +100,12 @@ export const createRefineActionCallEffectInitializer = (
   
   return createEffectInitializer(
     async (dispatch: Dispatch, isCancelled: () => boolean) => {
-      const actionRequestId = effect.actionRequestId;
+      const actionId = effect.actionId;
 
       // 从 state 获取 action
-      const action = state.actions[actionRequestId];
+      const action = state.actions[actionId];
       if (!action) {
-        throw new Error(`Action not found for actionRequestId: ${actionRequestId}`);
+        throw new Error(`Action not found for actionId: ${actionId}`);
       }
 
       // 从 action 获取 name 和 intention
@@ -141,7 +141,7 @@ export const createRefineActionCallEffectInitializer = (
       const parameters = parseRefinedParameters(result);
 
       // 发送 refined 信号
-      dispatchActionRequestRefined(actionRequestId, parameters, dispatch);
+      dispatchActionRequestRefined(actionId, parameters, dispatch);
     },
   );
 };

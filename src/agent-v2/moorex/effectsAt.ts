@@ -67,22 +67,22 @@ const extractReplyToUserEffects = ({
  *
  * 所有没有 parameter 的 actions 都需要细化（可以并发）
  *
- * Effect 只包含 actionRequestId，其他数据在 runEffect 时从 state 中获取
+ * Effect 只包含 actionId，其他数据在 runEffect 时从 state 中获取
  */
 const extractRefineActionCallEffects = (
   state: Immutable<AgentState>
 ): RefineActionCallEffect[] =>
   Object.entries(state.actions)
     .filter(
-      ([actionRequestId, action]) =>
+      ([actionId, action]) =>
         !action.response && // 如果已经有 response，跳过
         !action.parameter && // 如果没有 parameter，需要细化
         state.actionDefinitions[action.request.actionName] // 如果 action 定义不存在，跳过
     )
     .map(
-      ([actionRequestId]): RefineActionCallEffect => ({
+      ([actionId]): RefineActionCallEffect => ({
         kind: "refine-action-call",
-        actionRequestId,
+        actionId,
       })
     );
 
@@ -91,21 +91,21 @@ const extractRefineActionCallEffects = (
  *
  * 所有有 parameter 但没有 response 的 actions 都需要执行（可以并发）
  *
- * Effect 只包含 actionRequestId，其他数据在 runEffect 时从 state 中获取
+ * Effect 只包含 actionId，其他数据在 runEffect 时从 state 中获取
  */
 const extractActionRequestEffects = ({
   actions,
 }: Immutable<AgentState>): ActionRequestEffect[] =>
   Object.entries(actions)
     .filter(
-      ([actionRequestId, action]) =>
+      ([actionId, action]) =>
         !action.response && // 如果已经有 response，跳过
         action.parameter !== null // 如果有 parameter，需要执行
     )
     .map(
-      ([actionRequestId]): ActionRequestEffect => ({
+      ([actionId]): ActionRequestEffect => ({
         kind: "action-request",
-        actionRequestId,
+        actionId,
       })
     );
 
@@ -119,9 +119,9 @@ const getEffectKey = (effect: AgentEffect): string => {
     case "reply-to-user":
       return `reply-${effect.messageId}`;
     case "refine-action-call":
-      return `refine-action-${effect.actionRequestId}`;
+      return `refine-action-${effect.actionId}`;
     case "action-request":
-      return `action-request-${effect.actionRequestId}`;
+      return `action-request-${effect.actionId}`;
     default:
       const _exhaustive: never = effect;
       throw new Error(`Unknown effect kind: ${(_exhaustive as AgentEffect).kind}`);

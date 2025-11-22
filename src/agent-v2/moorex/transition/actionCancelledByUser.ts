@@ -16,7 +16,7 @@ export const handleActionCancelledByUser = (
   state: Immutable<AgentState>,
 ): Immutable<AgentState> => {
   // 检查 action 是否存在
-  const action = state.actions[signal.actionRequestId];
+  const action = state.actions[signal.actionId];
   if (!action) {
     // 如果不存在，静默忽略（正常情况：大模型可能已经率先 cancel 并删除了该 action）
     return state;
@@ -25,7 +25,7 @@ export const handleActionCancelledByUser = (
   // 更新 action 的 response（cancelled 类型）
   const updatedActions = {
     ...state.actions,
-    [signal.actionRequestId]: {
+    [signal.actionId]: {
       ...action,
       response: {
         type: "cancelled" as const,

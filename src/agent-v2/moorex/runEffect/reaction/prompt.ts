@@ -46,12 +46,12 @@ const getActionStatus = (
  * Format single action summary
  */
 const formatActionSummary = (
-  actionRequestId: string,
+  actionId: string,
   action: Immutable<AgentState["actions"][string]>,
   includeDetails: boolean,
 ): string => {
   const status = getActionStatus(action.response);
-  let text = `- ID: ${actionRequestId}, Name: ${action.request.actionName}, Intention: ${action.request.intention}, Status: ${status}`;
+  let text = `- ID: ${actionId}, Name: ${action.request.actionName}, Intention: ${action.request.intention}, Status: ${status}`;
 
   if (includeDetails) {
     const requestDetail = JSON.stringify({
@@ -81,11 +81,11 @@ const buildActionSummariesText = (
   loadedActionDetailIds: Set<string>,
 ): string => {
   return Object.entries(state.actions)
-    .map(([actionRequestId, action]) => {
-      const includeDetails = loadedActionDetailIds.has(actionRequestId);
+    .map(([actionId, action]) => {
+      const includeDetails = loadedActionDetailIds.has(actionId);
 
       return formatActionSummary(
-        actionRequestId,
+        actionId,
         action,
         includeDetails,
       );
@@ -189,7 +189,7 @@ ${codeBlockJson({
     cancelActions: ["action-id-1"], 
     newActions: [
       { 
-        actionRequestId: "new-action-id", 
+        actionId: "new-action-id", 
         actionName: "action-name", 
         initialIntent: "intent description" 
       }

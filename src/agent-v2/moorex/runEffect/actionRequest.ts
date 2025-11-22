@@ -11,19 +11,19 @@ import { createEffectInitializer } from "./effectInitializer.ts";
  */
 const getActionRequestAndParameters = (
   state: Immutable<AgentState>,
-  actionRequestId: string
+  actionId: string
 ): { actionName: string; parameters: string } | null => {
   // 从 state 获取 action
-  const action = state.actions[actionRequestId];
+  const action = state.actions[actionId];
   if (!action) {
-    console.warn(`Action not found for actionRequestId: ${actionRequestId}`);
+    console.warn(`Action not found for actionId: ${actionId}`);
     return null;
   }
 
   // 检查是否有 parameters
   if (!action.parameter) {
     console.warn(
-      `Action parameters not found for actionRequestId: ${actionRequestId}`
+      `Action parameters not found for actionId: ${actionId}`
     );
     return null;
   }
@@ -38,13 +38,13 @@ const getActionRequestAndParameters = (
  * 发送 action completed 信号
  */
 const dispatchActionCompleted = (
-  actionRequestId: string,
+  actionId: string,
   result: string,
   dispatch: Dispatch
 ): void => {
   const signal: ActionCompletedSignal = {
     kind: "action-completed",
-    actionRequestId,
+    actionId,
     result,
     timestamp: Date.now(),
   };
@@ -65,22 +65,22 @@ export const createActionRequestEffectInitializer = (
       const {
         behavior: { act },
       } = options;
-      const { actionRequestId } = effect;
+      const { actionId } = effect;
 
       // 获取并验证 action request 和 parameters
-      const requestData = getActionRequestAndParameters(state, actionRequestId);
+      const requestData = getActionRequestAndParameters(state, actionId);
       if (!requestData) {
         return;
       }
 
       // 调用 action
-      const result = await act(requestData.actionName, requestData.parameters);
+      const result = await act(actionId, requestData.actionName, requestData.parameters);
 
       if (isCancelled()) {
         return;
       }
 
       // 发送 action completed 信号
-      dispatchActionCompleted(actionRequestId, result, dispatch);
+      dispatchActionCompleted(actionId, result, dispatch);
     }
   );

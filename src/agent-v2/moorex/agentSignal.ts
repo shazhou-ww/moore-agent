@@ -15,7 +15,7 @@ export const userMessageReceivedSignalSchema = z.object({
  */
 export const actionCompletedSignalSchema = z.object({
   kind: z.literal("action-completed"),
-  actionRequestId: z.string(),
+  actionId: z.string(),
   result: z.string(), // 结果字符串（成功或失败信息）
   timestamp: z.number(),
 });
@@ -25,7 +25,7 @@ export const actionCompletedSignalSchema = z.object({
  */
 export const actionRequestRefinedSignalSchema = z.object({
   kind: z.literal("action-request-refined"),
-  actionRequestId: z.string(),
+  actionId: z.string(),
   parameters: z.string(), // JSON 字符串
   timestamp: z.number(),
 });
@@ -36,7 +36,7 @@ export const actionRequestRefinedSignalSchema = z.object({
  */
 export const actionCancelledByUserSignalSchema = z.object({
   kind: z.literal("action-cancelled-by-user"),
-  actionRequestId: z.string(),
+  actionId: z.string(),
   timestamp: z.number(),
 });
 
@@ -75,7 +75,7 @@ export const replyToUserDecisionSchema = z.object({
  */
 export const adjustActionsDecisionSchema = z.object({
   type: z.literal("adjust-actions"),
-  cancelActions: z.array(z.string()), // actionRequestIds 需要取消的
+  cancelActions: z.array(z.string()), // actionIds 需要取消的
   newActions: z.array(z.object({
     actionName: z.string(),
     initialIntent: z.string(), // 初始意图，用于后续 RefineActionCallEffect
@@ -108,13 +108,13 @@ export const replyToUserDecisionExtSchema = replyToUserDecisionSchema.extend({
 });
 
 /**
- * Adjust Actions Decision Schema Ext - 带 actionRequestId 的调整 actions 决策
+ * Adjust Actions Decision Schema Ext - 带 actionId 的调整 actions 决策
  */
 export const adjustActionsDecisionExtSchema = z.object({
   type: z.literal("adjust-actions"),
-  cancelActions: z.array(z.string()), // actionRequestIds 需要取消的
+  cancelActions: z.array(z.string()), // actionIds 需要取消的
   newActions: z.array(z.object({
-    actionRequestId: z.string(), // 注入生成的 actionRequestId
+    actionId: z.string(), // 注入生成的 actionId
     actionName: z.string(),
     initialIntent: z.string(), // 初始意图，用于后续 RefineActionCallEffect
   })),
@@ -230,7 +230,7 @@ export type ReplyToUserDecisionExt = z.infer<typeof replyToUserDecisionExtSchema
 export type AdjustActionsDecision = z.infer<typeof adjustActionsDecisionSchema>;
 
 /**
- * Adjust Actions Decision Ext - 带 actionRequestId 的调整 actions 决策
+ * Adjust Actions Decision Ext - 带 actionId 的调整 actions 决策
  */
 export type AdjustActionsDecisionExt = z.infer<typeof adjustActionsDecisionExtSchema>;
 

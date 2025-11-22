@@ -14,10 +14,10 @@ export const handleActionRequestRefined = (
   state: Immutable<AgentState>,
 ): Immutable<AgentState> => {
   // 检查 action 是否存在
-  const action = state.actions[signal.actionRequestId];
+  const action = state.actions[signal.actionId];
   if (!action) {
     console.warn(
-      `Ignoring action-request-refined signal for actionRequestId ${signal.actionRequestId}. ` +
+      `Ignoring action-request-refined signal for actionRequestId ${signal.actionId}. ` +
       `Action does not exist.`
     );
     return state;
@@ -26,7 +26,7 @@ export const handleActionRequestRefined = (
   // 更新 action 的 parameter
   const updatedActions = {
     ...state.actions,
-    [signal.actionRequestId]: {
+    [signal.actionId]: {
       ...action,
       parameter: signal.parameters,
     },

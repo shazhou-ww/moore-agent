@@ -51,9 +51,9 @@ const handleAdjustActionsDecision = (
   
   // 处理 cancelActions：更新 response 为 cancelled 类型
   // 如果一个要 cancel 的 action 已经 respond 过了，那就忽略，不用 cancel 了
-  for (const actionRequestId of cancelActions) {
+  for (const actionId of cancelActions) {
     // 如果该 action 已经有 response，忽略 cancel 操作
-    const action = updatedActions[actionRequestId];
+    const action = updatedActions[actionId];
     if (action && action.response) {
       continue;
     }
@@ -64,7 +64,7 @@ const handleAdjustActionsDecision = (
     }
     
     // 更新 response 为 cancelled 类型
-    updatedActions[actionRequestId] = {
+    updatedActions[actionId] = {
       ...action,
       response: {
         type: "cancelled" as const,
@@ -73,12 +73,12 @@ const handleAdjustActionsDecision = (
     };
   }
   
-  // 处理 newActions：创建新的 actions（使用 signal 带来的 actionRequestId）
+  // 处理 newActions：创建新的 actions（使用 signal 带来的 actionId）
   // 这些 actions 会通过后续的 RefineActionCallEffect 细化参数
   // 注意：不初始化 parameter，缺失的 parameter 可以提示需要对应的 refine effect
   for (const newAction of newActionsToCreate) {
     // 创建新的 action（不包含 parameter，parameter 通过 refine effect 添加）
-    updatedActions[newAction.actionRequestId] = {
+    updatedActions[newAction.actionId] = {
       request: {
         actionName: newAction.actionName,
         intention: newAction.initialIntent,

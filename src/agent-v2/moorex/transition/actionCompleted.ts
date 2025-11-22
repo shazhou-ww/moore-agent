@@ -14,10 +14,10 @@ export const handleActionCompleted = (
   state: Immutable<AgentState>,
 ): Immutable<AgentState> => {
   // 检查 action 是否存在
-  const action = state.actions[signal.actionRequestId];
+  const action = state.actions[signal.actionId];
   if (!action) {
     console.warn(
-      `Ignoring action-completed signal for actionRequestId ${signal.actionRequestId}. ` +
+      `Ignoring action-completed signal for actionId ${signal.actionId}. ` +
       `Action does not exist.`
     );
     return state;
@@ -26,7 +26,7 @@ export const handleActionCompleted = (
   // 更新 action 的 response（completed 类型）
   const updatedActions = {
     ...state.actions,
-    [signal.actionRequestId]: {
+    [signal.actionId]: {
       ...action,
       response: {
         type: "completed" as const,
