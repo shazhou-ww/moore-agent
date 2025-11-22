@@ -1,6 +1,6 @@
 import { partition } from "lodash";
 import type { Immutable } from "mutative";
-import type { AgentState, HistoryMessage } from "../../agentState.ts";
+import type { AgentState, HistoryMessage, Action } from "../../agentState.ts";
 import type { ReactionEffect } from "../../agentEffects.ts";
 import type {
   AgentSignal,
@@ -22,7 +22,7 @@ import { buildSystemPrompt } from "./prompt.ts";
  */
 type ReactionContext = {
   unrespondedUserMessages: HistoryMessage[];
-  unrespondedActionIds: string[];
+  unrespondedActions: Record<string, Action>;
 };
 
 /**
@@ -38,14 +38,17 @@ const collectUnrespondedItems = (
     .filter(({ type, timestamp }) => type === "user" && timestamp > lastReactionTimestamp);
 
   // 收集尚未响应的 action responses（timestamp > lastReactionTimestamp）
-  const unrespondedActionIds = Object.entries(state.actions)
+  const unrespondedActions = Object.entries(state.actions)
     .filter(
       ([_, action]) =>
         action.response && action.response.timestamp > lastReactionTimestamp,
     )
-    .map(([id]) => id);
+    .reduce<Record<string, Action>>((acc, [id, action]) => {
+      acc[id] = action;
+      return acc;
+    }, {});
 
-  return { unrespondedUserMessages, unrespondedActionIds };
+  return { unrespondedUserMessages, unrespondedActions };
 };
 
 /**
@@ -59,8 +62,8 @@ const getLastProcessedTimestamp = (
   const userMessageTimestamps = reactionContext.unrespondedUserMessages.map(
     (msg) => msg.timestamp,
   );
-  const actionResponseTimestamps = reactionContext.unrespondedActionIds
-    .map((id) => state.actions[id]?.response?.timestamp)
+  const actionResponseTimestamps = Object.values(reactionContext.unrespondedActions)
+    .map((action) => action.response?.timestamp)
     .filter((ts): ts is number => ts !== undefined);
 
   return Math.max(
@@ -71,27 +74,13 @@ const getLastProcessedTimestamp = (
 };
 
 /**
- * 检查是否有新输入，如果没有则返回 noop 决策
+ * 检查是否有新的更新
  */
-const checkAndHandleNoopDecision = (
-  state: Immutable<AgentState>,
-  reactionContext: ReactionContext,
-  dispatch: Dispatch,
-): boolean => {
-  if (
+const hasNothingToUpdate = (reactionContext: ReactionContext): boolean => {
+  return (
     reactionContext.unrespondedUserMessages.length === 0 &&
-    reactionContext.unrespondedActionIds.length === 0
-  ) {
-    const timestamp = getLastProcessedTimestamp(state, reactionContext);
-    const signal: ReactionCompleteSignal = {
-      kind: "reaction-complete",
-      decision: { type: "noop" },
-      timestamp,
-    };
-    dispatch(signal as Immutable<AgentSignal>);
-    return true;
-  }
-  return false;
+    Object.keys(reactionContext.unrespondedActions).length === 0
+  );
 };
 
 /**
@@ -231,6 +220,17 @@ const dispatchReactionComplete = (
 };
 
 /**
+ * 发送 noop 决策信号
+ */
+const dispatchNoop = (
+  state: Immutable<AgentState>,
+  reactionContext: ReactionContext,
+  dispatch: Dispatch,
+): void => {
+  dispatchReactionComplete(state, reactionContext, { type: "noop" }, dispatch);
+};
+
+/**
  * 创建 ReactionEffect 的初始器
  */
 export const createReactionEffectInitializer = (
@@ -252,7 +252,8 @@ export const createReactionEffectInitializer = (
       const reactionContext: ReactionContext = collectUnrespondedItems(state);
 
       // 如果没有新的输入，直接返回 noop 决策
-      if (checkAndHandleNoopDecision(state, reactionContext, dispatch)) {
+      if (hasNothingToUpdate(reactionContext)) {
+        dispatchNoop(state, reactionContext, dispatch);
         return;
       }
 
@@ -260,7 +261,7 @@ export const createReactionEffectInitializer = (
       let iterationState: IterationState = {
         currentHistoryCount: initialHistoryCount,
         loadedActionDetailIds: new Set<string>(
-          reactionContext.unrespondedActionIds,
+          Object.keys(reactionContext.unrespondedActions),
         ), // 初始加载未响应的 action 详情
         decision: null,
       };

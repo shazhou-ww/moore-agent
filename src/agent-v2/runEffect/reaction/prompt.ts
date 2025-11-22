@@ -3,7 +3,15 @@ import type { AgentState, ActionResponse } from "../../agentState.ts";
 import type { IterationState } from "./index.ts";
 
 /**
- * 提取可用的 actions descriptions
+ * Format JSON object as a function call in a code block
+ */
+const codeBlockJson = (obj: unknown, functionName: string = "decide"): string => {
+  const jsonString = JSON.stringify(obj, null, 2);
+  return `\`\`\`json\n${functionName}(${jsonString})\n\`\`\``;
+};
+
+/**
+ * Extract available actions descriptions
  */
 const extractAvailableActions = (
   state: Immutable<AgentState>,
@@ -14,7 +22,7 @@ const extractAvailableActions = (
 };
 
 /**
- * 构建 actions 列表文本
+ * Build actions list text
  */
 const buildActionsList = (availableActions: Record<string, string>): string => {
   return Object.entries(availableActions)
@@ -23,7 +31,7 @@ const buildActionsList = (availableActions: Record<string, string>): string => {
 };
 
 /**
- * 获取 action 的状态
+ * Get action status
  */
 const getActionStatus = (
   response: Immutable<ActionResponse> | null,
@@ -35,7 +43,7 @@ const getActionStatus = (
 };
 
 /**
- * 格式化单个 action summary
+ * Format single action summary
  */
 const formatActionSummary = (
   actionRequestId: string,
@@ -66,7 +74,7 @@ const formatActionSummary = (
 };
 
 /**
- * 构建所有 action summaries 的文本
+ * Build all action summaries text
  */
 const buildActionSummariesText = (
   state: Immutable<AgentState>,
@@ -86,7 +94,7 @@ const buildActionSummariesText = (
 };
 
 /**
- * 构建历史信息提示
+ * Build history info hint
  */
 const buildHistoryInfo = (
   totalMessages: number,
@@ -95,11 +103,11 @@ const buildHistoryInfo = (
   if (totalMessages <= currentMessages) {
     return "";
   }
-  return `\n注意：当前只显示了最近 ${currentMessages} 条消息，还有 ${totalMessages - currentMessages} 条消息未加载。如果需要更多历史消息，可以调用 decide 函数并传入 { type: "more-history" }。`;
+  return `\nNote: Currently showing only the last ${currentMessages} messages, with ${totalMessages - currentMessages} messages not loaded. If you need more history messages, you can call the decide function with { type: "more-history" }.`;
 };
 
 /**
- * 构建系统提示词
+ * Build system prompt
  */
 export const buildSystemPrompt = (
   state: Immutable<AgentState>,
@@ -118,27 +126,79 @@ export const buildSystemPrompt = (
 
   return `## Reaction Decision Task
 
-你需要根据当前状态决定下一步的计划。
+You need to decide on the next plan based on the current state.
 
-### 可用的 Action 类型：
+### Available Action Types:
 ${actionsList}
 
-### 已发起的 Actions：
-${actionSummariesText || "（无）"}
+### Initiated Actions:
+${actionSummariesText || "(none)"}
 ${historyInfo}
 
-### 决策选项：
-1. **noop**: 什么都不需要做
-2. **reply-to-user**: 已做了需要的动作，收集了足够的信息，需要对用户输出
-3. **adjust-actions**: 增减 Actions 以收集需要的信息，执行必要的行为
+### Decision Options:
+1. **noop**: Nothing needs to be done
+2. **reply-to-user**: You have completed the necessary actions, collected sufficient information, and need to respond to the user
+3. **adjust-actions**: Adjust actions based on context analysis:
+   - **Cancel actions**: Cancel running actions that are no longer needed based on the current context
+   - **Add actions**: Create new actions that are needed to supplement the current task based on context analysis
 
-请调用 decide 函数来做出决策。如果需要更多信息，可以：
-- 调用 decide({ type: "more-history" }) 来获取更多历史消息
-- 调用 decide({ type: "action-detail", ids: [...] }) 来获取特定 action 的详情（request & response）
+Please call the decide function to make a decision. Examples:
+
+**To get more information:**
+
+Get more history messages:
+
+${codeBlockJson({ type: "more-history" })}
+
+Get details for specific actions:
+
+${codeBlockJson({ 
+  type: "action-detail", 
+  ids: ["action-id-1", "action-id-2"] 
+})}
+
+**To make a final decision:**
+
+No action needed:
+
+${codeBlockJson({ 
+  type: "decision-made", 
+  decision: { type: "noop" } 
+})}
+
+Reply to the user:
+
+${codeBlockJson({ 
+  type: "decision-made", 
+  decision: { 
+    type: "reply-to-user", 
+    lastHistoryMessageId: "message-id", 
+    relatedActionIds: ["action-id-1", "action-id-2"] 
+  } 
+})}
+
+Adjust actions based on context analysis:
+
+Cancel running actions that are no longer needed, and add new actions that are required:
+
+${codeBlockJson({ 
+  type: "decision-made", 
+  decision: { 
+    type: "adjust-actions", 
+    cancelActions: ["action-id-1"], 
+    newActions: [
+      { 
+        actionRequestId: "new-action-id", 
+        actionName: "action-name", 
+        initialIntent: "intent description" 
+      }
+    ] 
+  } 
+})}
 
 ---
 
-## 主线任务的系统提示词
+## Main Task System Prompt
 ================================================================================
 ${state.systemPrompts}
 ================================================================================
