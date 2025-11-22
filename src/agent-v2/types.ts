@@ -54,6 +54,7 @@ export type CreateAgentOptions = {
   reaction?: ReactionOptions;
   persistence: {
     adapter: PersistenceAdapter;
+    debounceDelay?: number; // debounce 延迟时间（毫秒），默认 2000
   };
 };
 

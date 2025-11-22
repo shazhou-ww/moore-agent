@@ -5,13 +5,14 @@ import { createAgentMoorex } from "./moorex/index.ts";
 import { createThinkFn, createSpeakFn } from "./adapters/llm.ts";
 import { createActFn } from "./adapters/actions.ts";
 import { createPersistenceStore } from "./adapters/persistence.ts";
-import type { CreateAgentOptions, ActionWithRun } from "./types.ts";
+import type { CreateAgentOptions } from "./types.ts";
 import type { Agent } from "./types.ts";
 import type { RunEffectOptions } from "./moorex/runEffect/types.ts";
-import { DEFAULT_REACTION_OPTIONS } from "./constants.ts";
-import { createInitialAgentState, loadOrCreateInitialState } from "./state.ts";
+import { DEFAULT_REACTION_OPTIONS, DEFAULT_PERSISTENCE_DEBOUNCE_DELAY } from "./constants.ts";
+import { loadOrCreateInitialState } from "./state.ts";
 import { validateKey } from "./validation.ts";
 import { createId } from "../utils/id.ts";
+import { debounce } from "lodash";
 import debug from "debug";
 
 const log = debug("agent-v2");
@@ -64,15 +65,24 @@ export const createAgent = async (
   // 创建 AgentMoorex 实例
   const machine = createAgentMoorex(runEffectOptions, initialState);
 
-  // 设置持久化事件处理器
-  let lastState: AgentState | null = null;
+  // 设置持久化事件处理器（带 debounce）
+  let lastState: Immutable<AgentState> | null = null;
+  
+  // 获取 debounce 延迟时间，使用配置值或默认值
+  const debounceDelay = options.persistence.debounceDelay ?? DEFAULT_PERSISTENCE_DEBOUNCE_DELAY;
+  
+  // 创建 debounced 保存函数
+  const debouncedSave = debounce((state: Immutable<AgentState>) => {
+    store.commit(state).catch((error) => {
+      log("Error saving state:", error);
+    });
+  }, debounceDelay);
+
   machine.on((event) => {
     if (event.type === "state-updated") {
-      lastState = event.state as unknown as AgentState;
-      // 异步保存，不阻塞事件处理
-      store.commit(event.state as any).catch((error) => {
-        log("Error saving state:", error);
-      });
+      lastState = event.state;
+      // 调用 debounced 保存函数
+      debouncedSave(lastState);
     }
   });
 
@@ -89,16 +99,18 @@ export const createAgent = async (
       machine.dispatch(signal as Immutable<AgentSignal>);
     },
     getState: () => {
-      return machine.getState() as unknown as AgentState;
+      return machine.getState();
     },
     on: (handler) => {
       return machine.on(handler as any);
     },
     close: async () => {
       log("Closing agent");
+      // 取消待执行的 debounce 调用
+      debouncedSave.cancel();
       // 保存最后的状态
       if (lastState) {
-        await store.commit(lastState as any);
+        await store.commit(lastState);
       }
       await adapter.close();
     },

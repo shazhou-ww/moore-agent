@@ -1,3 +1,5 @@
+import type { Immutable } from "mutative";
+import type { AgentState } from "../moorex/agentState.ts";
 import {
   createLevelAdapter,
   type LevelAdapterOptions,
@@ -42,7 +44,7 @@ export const createPersistenceStore = async (
     return createHash("sha256").update(Buffer.from(bytes)).digest("hex");
   };
 
-  const store = await createStore({
+  const store = await createStore<Immutable<AgentState>>({
     schema: agentStateSchema,
     adapter,
     hashFn,
