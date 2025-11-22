@@ -187,7 +187,8 @@ export const useAgent = (): UseAgentReturn => {
   }, []); // connectSSE 是稳定的函数引用，不需要作为依赖
 
   const sendMessage = useCallback(async (content: string) => {
-    // 生成 UUID 和 timestamp
+    // agent-v2 的 sendMessage 只接受 content: string
+    // 生成临时的 userMessage 用于前端显示
     const userMessage: UserMessage = {
       id: crypto.randomUUID(),
       kind: "user",
@@ -204,15 +205,11 @@ export const useAgent = (): UseAgentReturn => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ userMessage }),
+        body: JSON.stringify({ content }),
       });
 
       if (!response.ok) {
-        if (response.status === 409) {
-          console.error("Message ID conflict");
-        } else {
-          console.error("Failed to send message");
-        }
+        console.error("Failed to send message");
         // 从 pending messages 中移除
         setPendingMessages((prev) =>
           prev.filter((msg) => msg.id !== userMessage.id)

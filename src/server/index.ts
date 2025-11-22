@@ -1,36 +1,67 @@
 import express, { type Request, type Response } from "express";
-import { createAgent, type Agent } from "../agent/index.ts";
-import type { LLMCallFn, ToolCallFn } from "../types/effects.ts";
-import { createLLMCallFn } from "./llm.ts";
-import { createToolCallFn } from "./tools.ts";
+import { createAgent, type Agent, type CreateAgentOptions } from "../agent-v2/index.ts";
 import debug from "debug";
 
 const log = debug("server");
 
 let agent: Agent | null = null;
 
+// 固定使用全 0 的 UUID 作为 agent key
+const AGENT_KEY = "00000000-0000-0000-0000-000000000000";
+
 const initializeAgent = async () => {
   if (agent) {
     return agent;
   }
 
-  const systemPrompt = process.env.SYSTEM_PROMPT || "You are a helpful assistant.";
-  
-  const callLLM: LLMCallFn = createLLMCallFn({
-    endpoint: process.env.LLM_ENDPOINT || "",
-    apiKey: process.env.LLM_API_KEY || "",
-    model: process.env.LLM_MODEL || "",
-  });
+  const systemPrompts = process.env.SYSTEM_PROMPT || "You are a helpful assistant.";
 
-  const callTool: ToolCallFn = createToolCallFn();
+  // 配置 LLM 模型
+  const llmEndpoint = process.env.LLM_ENDPOINT || "";
+  const llmApiKey = process.env.LLM_API_KEY || "";
+  const llmModel = process.env.LLM_MODEL || "";
+  const llmTemperature = parseFloat(process.env.LLM_TEMPERATURE || "0.7");
+  const llmTopP = parseFloat(process.env.LLM_TOP_P || "1.0");
 
-  agent = await createAgent({
-    systemPrompt,
-    callLLM,
-    callTool,
-  });
+  if (!llmEndpoint || !llmApiKey || !llmModel) {
+    throw new Error("LLM configuration is incomplete. Please set LLM_ENDPOINT, LLM_API_KEY, and LLM_MODEL environment variables.");
+  }
 
-  log("Agent initialized");
+  // 创建 CreateAgentOptions
+  const options: CreateAgentOptions = {
+    systemPrompts,
+    actions: {}, // 暂时为空，后续可以添加
+    thinkModel: {
+      provider: {
+        endpoint: llmEndpoint,
+        apiKey: llmApiKey,
+      },
+      model: llmModel,
+      temperature: llmTemperature,
+      topP: llmTopP,
+    },
+    speakModel: {
+      provider: {
+        endpoint: llmEndpoint,
+        apiKey: llmApiKey,
+      },
+      model: llmModel,
+      temperature: llmTemperature,
+      topP: llmTopP,
+    },
+    persistence: {
+      adapter: {
+        location: process.env.PERSISTENCE_LOCATION,
+        createIfMissing: process.env.PERSISTENCE_CREATE_IF_MISSING !== "false",
+        compression: process.env.PERSISTENCE_COMPRESSION !== "false",
+      },
+      debounceDelay: parseInt(process.env.PERSISTENCE_DEBOUNCE_DELAY || "2000", 10),
+    },
+  };
+
+  agent = await createAgent(AGENT_KEY, options);
+
+  log("Agent initialized with key:", AGENT_KEY);
   return agent;
 };
 
@@ -56,36 +87,16 @@ export const startServer = async (port: number = 3000) => {
   // POST /api/send
   app.post("/api/send", async (req: Request, res: Response) => {
     try {
-      const { userMessage } = req.body;
+      const { content } = req.body;
 
-      if (!userMessage || typeof userMessage !== "object") {
-        return res.status(400).json({ error: "UserMessage is required" });
-      }
-
-      // 验证 userMessage 结构
-      if (
-        !userMessage.id ||
-        typeof userMessage.id !== "string" ||
-        !userMessage.content ||
-        typeof userMessage.content !== "string" ||
-        !userMessage.timestamp ||
-        typeof userMessage.timestamp !== "number" ||
-        userMessage.kind !== "user"
-      ) {
-        return res.status(400).json({ error: "Invalid UserMessage format" });
+      if (!content || typeof content !== "string") {
+        return res.status(400).json({ error: "Content is required and must be a string" });
       }
 
       const currentAgent = await initializeAgent();
       
-      // 检查 ID 冲突
-      const state = currentAgent.getState();
-      const hasConflict = state.messages.some((msg) => msg.id === userMessage.id);
-      
-      if (hasConflict) {
-        return res.status(409).json({ error: "Message ID conflict" });
-      }
-
-      currentAgent.sendMessage(userMessage);
+      // agent-v2 的 sendMessage 只接受 content: string
+      currentAgent.sendMessage(content);
 
       return res.json({ success: true });
     } catch (error) {
@@ -111,7 +122,6 @@ export const startServer = async (port: number = 3000) => {
       const initialEvent = {
         type: "state-updated",
         state,
-        effectCount: 0,
       };
       const eventData = `data: ${JSON.stringify(initialEvent)}\n\n`;
       log("Sending initial state-updated event");
@@ -130,10 +140,8 @@ export const startServer = async (port: number = 3000) => {
     // 订阅后续事件
     const unsubscribe = currentAgent.on((event) => {
       try {
-        // 只发送非 state-updated 的事件
-        if (event.type !== "state-updated") {
-          res.write(`data: ${JSON.stringify(event)}\n\n`);
-        }
+        // agent-v2 的事件结构可能不同，直接发送所有事件
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
       } catch (error) {
         log("Error sending SSE event:", error);
       }
