@@ -1,4 +1,5 @@
-import type { ActionDefinition } from "./moorex/agentState.ts";
+import type { Immutable } from "mutative";
+import type { ActionDefinition, AgentState } from "./moorex/agentState.ts";
 
 /**
  * Model Provider 配置
@@ -56,4 +57,13 @@ export type CreateAgentOptions = {
   };
 };
 
+/**
+ * Agent 接口
+ */
+export type Agent = {
+  sendMessage(content: string): void;
+  getState(): Immutable<AgentState>;
+  on(handler: (event: { type: string; state: Immutable<AgentState> }) => void): () => void;
+  close(): Promise<void>;
+};
 
