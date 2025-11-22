@@ -39,8 +39,7 @@ export type ThinkFn = (
 export type SpeakFn = (
   systemPrompts: string,
   messageWindow: HistoryMessage[],
-  onChunk: (chunk: string) => void,
-) => Promise<void>;
+) => Promise<AsyncIterator<string>>;
 
 /**
  * 调用 Action 函数类型（act）
