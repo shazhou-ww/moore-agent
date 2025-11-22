@@ -22,7 +22,7 @@ export const createThinkFn = (model: LargeLanguageModel): ThinkFn => {
     outputSchema: Record<string, unknown>,
   ): Promise<string> => {
     log("Calling think model:", model.model);
-    log("message window:", messageWindow);
+    log("message window size:", messageWindow.length);
 
 
     try {
@@ -40,28 +40,49 @@ export const createThinkFn = (model: LargeLanguageModel): ThinkFn => {
         })),
       ]) as OpenAI.Chat.Completions.ChatCompletionMessageParam[];
 
-      // 调用 OpenAI API（非流式）
+      // 定义 tool，使用 outputSchema 作为参数 schema
+      const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
+        {
+          type: "function",
+          function: {
+            name: "think",
+            description: "Return the decision result in the specified format",
+            parameters: outputSchema,
+          },
+        },
+      ];
+
+      // 调用 OpenAI API（非流式），使用 tool_choice 强制调用函数
       const response = await client.chat.completions.create({
         model: model.model,
         messages,
         temperature: model.temperature,
         top_p: model.topP,
-        response_format: {
-          type: "json_schema",
-          json_schema: {
-            name: "response",
-            schema: outputSchema,
-            strict: true,
-          },
-        },
+        tools,
+        tool_choice: { type: "function", function: { name: "think" } },
       });
 
-      const content = response.choices[0]?.message?.content;
-      if (!content) {
-        throw new Error("Empty response from think model");
+      // 从 tool call 中提取结果
+      const toolCall = response.choices[0]?.message?.tool_calls?.[0];
+      if (!toolCall) {
+        throw new Error("No tool call in response");
+      }
+      
+      // 检查 tool call 类型并提取参数
+      if (toolCall.type !== "function") {
+        throw new Error("Expected function tool call but got: " + toolCall.type);
+      }
+      
+      if (toolCall.function.name !== "think") {
+        throw new Error("Expected tool call 'think' but got: " + toolCall.function.name);
       }
 
-      log("Think model response received, content:\n\n", content);
+      const content = toolCall.function.arguments;
+      if (!content) {
+        throw new Error("Empty arguments from think tool call");
+      }
+
+      log("Think model response received, content:", content);
       return content;
     } catch (error) {
       log("Think model call failed:", error);

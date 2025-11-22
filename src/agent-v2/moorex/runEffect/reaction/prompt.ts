@@ -161,16 +161,9 @@ Adjust actions only when you have identified a specific information gap that req
    - **Cancel actions**: Cancel running actions that are no longer needed based on the current context
    - **Add actions**: Create new actions that are needed to supplement the current task when there is a clear information gap
 
-**3. noop** (Last resort - Only when information is missing but current actions are sufficient):
-Use noop only when:
-   - There is an information gap that prevents immediate reply
-   - BUT the currently executing actions are already sufficient to address this gap
-   - You are waiting for those actions to complete before you can reply
-
 **Decision Priority:**
 - **Default to reply-to-user** unless you clearly identify missing information
 - Only consider adjust-actions when there is a clear information gap that requires new actions
-- Only consider noop when information is missing but current actions are already handling it
 
 Please call the ${funcName} function to make a decision. Examples:
 
@@ -207,7 +200,6 @@ ${codeBlockJson({
     cancelActions: ["action-id-1"], 
     newActions: [
       { 
-        actionId: "new-action-id", 
         actionName: "action-name", 
         initialIntent: "intent description" 
       }
@@ -215,11 +207,15 @@ ${codeBlockJson({
   } 
 })}
 
-No action needed (only when information is missing but current actions are sufficient):
+If no actions need to be adjusted, use adjust-actions with empty arrays:
 
 ${codeBlockJson({ 
   type: "decision-made", 
-  decision: { type: "noop" } 
+  decision: { 
+    type: "adjust-actions", 
+    cancelActions: [], 
+    newActions: [] 
+  } 
 })}
 
 ---

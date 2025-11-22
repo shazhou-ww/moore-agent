@@ -92,12 +92,11 @@ export const noopDecisionSchema = z.object({
 
 /**
  * Reaction Decision Schema - Reaction 的决策结果
- * 分成三个互斥类型
+ * 分成两个互斥类型（不包含 noop，noop 用 adjust-actions 带空集代替）
  */
 export const reactionDecisionSchema = z.discriminatedUnion("type", [
   replyToUserDecisionSchema,
   adjustActionsDecisionSchema,
-  noopDecisionSchema,
 ]);
 
 /**
@@ -122,11 +121,11 @@ export const adjustActionsDecisionExtSchema = z.object({
 
 /**
  * Reaction Decision Schema Ext - 带注入 id 的决策结果
+ * 不包含 noop（noop 用 adjust-actions 带空集代替）
  */
 export const reactionDecisionExtSchema = z.discriminatedUnion("type", [
   replyToUserDecisionExtSchema,
   adjustActionsDecisionExtSchema,
-  noopDecisionSchema,
 ]);
 
 /**

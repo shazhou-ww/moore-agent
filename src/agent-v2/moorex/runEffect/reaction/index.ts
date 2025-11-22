@@ -184,10 +184,10 @@ const handleIterationDecision = (
   } else if (decideCall.type === "more-history") {
     // 检查是否还有更多 history
     if (iterationState.currentHistoryCount >= totalMessages) {
-      // 已经没有更多 history 了，返回 noop 决策
+      // 已经没有更多 history 了，返回 adjust-actions 带空集
       return {
         ...iterationState,
-        decision: { type: "noop" },
+        decision: { type: "adjust-actions", cancelActions: [], newActions: [] },
       };
     }
     // 追溯更多历史消息
@@ -232,10 +232,10 @@ const injectDecisionIds = (decision: ReactionDecision): ReactionDecisionExt => {
         actionId: randomUUID(),
       })),
     };
-  } else {
-    // noop 不需要注入 id
-    return decision;
   }
+  
+  // 不应该到达这里（reaction 不提供 noop 选项）
+  throw new Error(`Unexpected decision type: ${(decision as { type: string }).type}`);
 };
 
 /**
@@ -258,16 +258,6 @@ const dispatchReactionComplete = (
   dispatch(signal as Immutable<AgentSignal>);
 };
 
-/**
- * 发送 noop 决策信号
- */
-const dispatchNoop = (
-  state: Immutable<AgentState>,
-  reactionContext: ReactionContext,
-  dispatch: Dispatch,
-): void => {
-  dispatchReactionComplete(state, reactionContext, { type: "noop" }, dispatch);
-};
 
 /**
  * 创建 ReactionEffect 的初始器
@@ -290,9 +280,14 @@ export const createReactionEffectInitializer = (
       // 收集尚未响应的消息和 action responses
       const reactionContext: ReactionContext = collectUnrespondedItems(state);
 
-      // 如果没有新的输入，直接返回 noop 决策
+      // 如果没有新的输入，直接返回 adjust-actions 带空集
       if (hasNothingToUpdate(reactionContext)) {
-        dispatchNoop(state, reactionContext, dispatch);
+        dispatchReactionComplete(
+          state,
+          reactionContext,
+          { type: "adjust-actions", cancelActions: [], newActions: [] },
+          dispatch,
+        );
         return;
       }
 

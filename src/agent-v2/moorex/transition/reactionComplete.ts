@@ -97,28 +97,13 @@ const handleAdjustActionsDecision = (
 };
 
 /**
- * 处理 noop 决策
- */
-const handleNoopDecision = (
-  timestamp: number,
-  state: Immutable<AgentState>,
-): Immutable<AgentState> => {
-  // noop：什么都不需要调整，只更新 lastReactionTimestamp
-  return {
-    ...state,
-    lastReactionTimestamp: timestamp,
-  };
-};
-
-/**
  * 处理 reaction-complete 信号
  * 
  * Transition 效果：
  * - Reaction 是 non-streaming 的，直接返回决策结果
  * - 根据决策结果处理：
  *   - 如果是 reply-to-user：添加到 replies（等待后续的 ReplyToUserEffect 触发 streaming）
- *   - 如果是 adjust-actions：直接调整 action requests
- *   - 如果是 noop：什么都不需要调整，只更新 lastReactionTimestamp
+ *   - 如果是 adjust-actions：直接调整 action requests（空集表示 noop）
  * - 更新 lastReactionTimestamp 为 signal.timestamp
  */
 export const handleReactionComplete = (
@@ -130,8 +115,6 @@ export const handleReactionComplete = (
     return handleReplyToUserDecision(signal.decision, signal.timestamp, state);
   } else if (signal.decision.type === "adjust-actions") {
     return handleAdjustActionsDecision(signal.decision, signal.timestamp, state);
-  } else if (signal.decision.type === "noop") {
-    return handleNoopDecision(signal.timestamp, state);
   }
   
   // 默认情况（不应该发生，但为了类型安全）

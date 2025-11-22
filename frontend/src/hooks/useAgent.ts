@@ -85,7 +85,7 @@ export const useAgent = (): UseAgentReturn => {
               });
             });
           }
-        } else if (agentEvent.type === "signal-received" && agentEvent.signal.kind !== "assistant-chunk-received") {
+        } else if (agentEvent.type === "signal-received" && !agentEvent.signal.kind.includes("chunk")) {
           console.log('signal-received event received:', agentEvent.signal.kind, agentEvent.signal);
         }
       } catch (error) {
