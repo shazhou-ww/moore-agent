@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import type { AgentState, AgentEvent, UserMessage } from "../types.ts";
+import type { AgentState, HistoryMessage, UserMessage } from "../types.ts";
 import type { FrozenJson } from "@hstore/core";
-import { transition as baseTransition } from "@/agent/transition.ts";
 
 type UseAgentReturn = {
   state: FrozenJson<AgentState> | null;
@@ -54,92 +53,40 @@ export const useAgent = (): UseAgentReturn => {
       }
 
       try {
-        const agentEvent: AgentEvent = JSON.parse(event.data);
+        const agentEvent: any = JSON.parse(event.data);
         console.log("Parsed agent event:", agentEvent.type);
 
+        // agent-v2 的事件结构是 { type: string; state: Immutable<AgentState> }
         if (agentEvent.type === "state-updated") {
-          // 初始化时接收完整状态
           console.log("Received state-updated event, setting state");
           setState(agentEvent.state);
           setIsLoading(false);
-        } else if (agentEvent.type === "signal-received") {
-          // 根据 signal 更新前端状态
-          setState((currentState) => {
-            if (!currentState) return currentState;
-            try {
-              // 处理 chunk 和 complete 信号
-              const signal = agentEvent.signal;
-              
-              if (signal.kind === "assistant-chunk") {
-                // 更新 partialMessage
-                if (currentState.partialMessage && currentState.partialMessage.messageId === signal.messageId) {
-                  // 追加 chunk
-                  return {
-                    ...currentState,
-                    partialMessage: {
-                      messageId: currentState.partialMessage.messageId,
-                      chunks: [...currentState.partialMessage.chunks, signal.chunk],
-                    },
-                  };
-                } else {
-                  // 创建新的 partialMessage
-                  return {
-                    ...currentState,
-                    partialMessage: {
-                      messageId: signal.messageId,
-                      chunks: [signal.chunk],
-                    },
-                  };
-                }
-              }
-              
-              if (signal.kind === "assistant-complete") {
-                // 从 partialMessage 拼装完整的 assistant message
-                if (currentState.partialMessage && currentState.partialMessage.messageId === signal.messageId) {
-                  const content = currentState.partialMessage.chunks.join("");
-                  const assistantMessage = {
-                    id: signal.messageId,
-                    kind: "assistant" as const,
-                    content,
-                    toolCalls: signal.toolCalls,
-                    timestamp: signal.timestamp,
-                  };
-                  
-                  // 插入消息并保持排序
-                  const newMessages = [...currentState.messages, assistantMessage].sort(
-                    (a, b) => a.timestamp - b.timestamp,
-                  );
-                  
-                  return {
-                    ...currentState,
-                    messages: newMessages,
-                    partialMessage: null,
-                    lastSentToLLMAt: signal.timestamp,
-                  };
-                }
-              }
-              
-              // 其他信号（user, tool）使用 transition
-              if (signal.kind === "user" || signal.kind === "tool") {
-                const newState = baseTransition(signal)(currentState);
-                return newState;
-              }
-              
-              // 未知信号类型，返回原状态
-              return currentState;
-            } catch (error) {
-              // 前端忽略无效的 timestamp，返回原状态
-              console.warn("Invalid timestamp, ignoring signal:", error);
-              return currentState;
-            }
-          });
-
-          // 如果收到 user message 的 signal，说明该消息已被确认，从 pendingMessages 中移除
-          if (agentEvent.signal.kind === "user") {
-            setPendingMessages((prev) =>
-              prev.filter((msg) => msg.id === (agentEvent.signal as UserMessage).id)
+          
+          // 检查是否有新的 user message 被确认（出现在 historyMessages 中）
+          // 通过内容和时间戳匹配，因为前端的临时 ID 和后端的 messageId 不同
+          if (agentEvent.state && agentEvent.state.historyMessages) {
+            const confirmedUserMessages = agentEvent.state.historyMessages.filter(
+              (msg: HistoryMessage) => msg.type === "user"
             );
+            
+            setPendingMessages((prev) => {
+              return prev.filter((pendingMsg) => {
+                // 检查是否有内容相同且时间戳接近（5秒内）的已确认消息
+                const isConfirmed = confirmedUserMessages.some((confirmedMsg: HistoryMessage) => {
+                  const contentMatch = confirmedMsg.content === pendingMsg.content;
+                  const timeMatch = 
+                    confirmedMsg.timestamp >= pendingMsg.timestamp &&
+                    confirmedMsg.timestamp - pendingMsg.timestamp < 5000; // 5秒内
+                  return contentMatch && timeMatch;
+                });
+                
+                // 如果已确认，则从 pendingMessages 中移除
+                return !isConfirmed;
+              });
+            });
           }
+        } else if (agentEvent.type === "signal-received" && agentEvent.signal.kind !== "assistant-chunk-received") {
+          console.log('signal-received event received:', agentEvent.signal.kind, agentEvent.signal);
         }
       } catch (error) {
         console.error("Error parsing SSE event:", error);
@@ -189,11 +136,12 @@ export const useAgent = (): UseAgentReturn => {
   const sendMessage = useCallback(async (content: string) => {
     // agent-v2 的 sendMessage 只接受 content: string
     // 生成临时的 userMessage 用于前端显示
+    const sendTimestamp = Date.now();
     const userMessage: UserMessage = {
-      id: crypto.randomUUID(),
+      id: crypto.randomUUID(), // 临时 ID，用于前端标识
       kind: "user",
       content,
-      timestamp: Date.now(),
+      timestamp: sendTimestamp,
     };
 
     // 添加到 pending messages
@@ -231,4 +179,3 @@ export const useAgent = (): UseAgentReturn => {
     pendingMessages,
   };
 };
-

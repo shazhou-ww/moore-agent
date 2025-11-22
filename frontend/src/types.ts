@@ -1,68 +1,38 @@
 import type { FrozenJson } from "@hstore/core";
+import type {
+  AgentState,
+  HistoryMessage,
+  ActionDefinition,
+  ActionRequest,
+  ActionResponse,
+  Action,
+  AssistantChunk,
+  ReplyToUserContext,
+} from "@/agent-v2/index.ts";
 
-export type BaseMessage = {
+// 重新导出 agent-v2 的类型
+export type {
+  AgentState,
+  HistoryMessage,
+  ActionDefinition,
+  ActionRequest,
+  ActionResponse,
+  Action,
+  AssistantChunk,
+  ReplyToUserContext,
+};
+
+// 前端特有的事件类型
+export type AgentEvent = {
+  type: string;
+  state: FrozenJson<AgentState>;
+};
+
+// 用于前端显示的临时消息类型
+export type UserMessage = {
   id: string;
+  kind: "user";
   content: string;
   timestamp: number;
 };
-
-export type SystemMessage = BaseMessage & {
-  kind: "system";
-};
-
-export type UserMessage = BaseMessage & {
-  kind: "user";
-};
-
-export type AssistantToolCall = {
-  id: string;
-  name: string;
-  input: string;
-};
-
-export type AssistantMessage = BaseMessage & {
-  kind: "assistant";
-  toolCalls: AssistantToolCall[];
-};
-
-export type ToolMessage = BaseMessage & {
-  kind: "tool";
-  callId: string;
-};
-
-export type AssistantChunkSignal = {
-  kind: "assistant-chunk";
-  messageId: string;
-  chunk: string;
-  timestamp: number;
-};
-
-export type AssistantMessageCompleteSignal = {
-  kind: "assistant-complete";
-  messageId: string;
-  toolCalls: AssistantToolCall[];
-  timestamp: number;
-};
-
-export type Signal = UserMessage | ToolMessage | AssistantMessage | AssistantChunkSignal | AssistantMessageCompleteSignal;
-
-export type PartialMessage = {
-  messageId: string;
-  chunks: string[];
-};
-
-export type AgentState = {
-  systemMessage: SystemMessage;
-  messages: (UserMessage | ToolMessage | AssistantMessage)[];
-  partialMessage: PartialMessage | null;
-  lastSentToLLMAt: number;
-};
-
-export type AgentEvent =
-  | { type: "signal-received"; signal: Signal; effectCount: number }
-  | { type: "state-updated"; state: FrozenJson<AgentState>; effectCount: number }
-  | { type: "effect-started"; effect: any; effectCount: number }
-  | { type: "effect-completed"; effect: any; effectCount: number }
-  | { type: "effect-canceled"; effect: any; effectCount: number }
-  | { type: "effect-failed"; effect: any; error: unknown; effectCount: number };
 
