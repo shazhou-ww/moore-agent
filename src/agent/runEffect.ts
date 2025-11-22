@@ -132,7 +132,7 @@ const createLLMEffectInitializer = (
         };
 
         // 调用 streaming LLM
-        await callLLM(prompt, Array.from(effect.messageWindow), handleChunk, handleComplete);
+        await callLLM(prompt, Array.from(effect.messageWindow) as ReadonlyArray<UserMessage | ToolMessage | AssistantMessage>, handleChunk, handleComplete);
       } catch (error) {
         if (!canceled) {
           log("LLM call failed:", error);
