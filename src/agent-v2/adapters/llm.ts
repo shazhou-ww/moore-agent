@@ -164,6 +164,8 @@ Do not explain anything. Just continue the text directly.
         },
       ]) as OpenAI.Chat.Completions.ChatCompletionMessageParam[];
 
+      log("Messages:\n\n", JSON.stringify(messages, null, 2));
+
       // 调用 OpenAI API（流式）
       const stream = await client.chat.completions.create({
         model: model.model,

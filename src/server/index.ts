@@ -1,6 +1,7 @@
 import express, { type Request, type Response } from "express";
 import { createAgent, type Agent, type CreateAgentOptions } from "../agent-v2/index.ts";
 import debug from "debug";
+import { createTavilyActions } from "./actions/tavily/index.ts";
 
 const log = debug("server");
 
@@ -27,10 +28,20 @@ const initializeAgent = async () => {
     throw new Error("LLM configuration is incomplete. Please set LLM_ENDPOINT, LLM_API_KEY, and LLM_MODEL environment variables.");
   }
 
+  // 创建 Tavily Actions
+  const tavilyApiKey = process.env.TAVILY_API_KEY;
+  const tavilyActions = tavilyApiKey
+    ? createTavilyActions({
+        apiKey: tavilyApiKey,
+        defaultSearchDepth: (process.env.TAVILY_DEFAULT_SEARCH_DEPTH as "basic" | "advanced") || "basic",
+        defaultMaxResults: parseInt(process.env.TAVILY_DEFAULT_MAX_RESULTS || "5", 10),
+      })
+    : {};
+
   // 创建 CreateAgentOptions
   const options: CreateAgentOptions = {
     systemPrompts,
-    actions: {}, // 暂时为空，后续可以添加
+    actions: tavilyActions,
     thinkModel: {
       provider: {
         endpoint: llmEndpoint,
