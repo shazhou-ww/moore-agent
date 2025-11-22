@@ -184,7 +184,6 @@ ${codeBlockJson({
   type: "decision-made", 
   decision: { 
     type: "reply-to-user", 
-    lastHistoryMessageId: "message-id", 
     relatedActionIds: ["action-id-1", "action-id-2"] 
   } 
 })}

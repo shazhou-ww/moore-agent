@@ -1,4 +1,4 @@
-import { findLastIndex, pick } from "lodash";
+import { pick } from "lodash";
 import type { Immutable } from "mutative";
 import type { AgentState, HistoryMessage, Action } from "../agentState.ts";
 import type { ReplyToUserEffect } from "../agentEffects.ts";
@@ -12,22 +12,16 @@ import type { Dispatch } from "./effectInitializer.ts";
 import { createEffectInitializer } from "./effectInitializer.ts";
 
 /**
- * 收集相关的历史消息（从第一条消息到 lastHistoryMessageId 的所有消息）
+ * 收集相关的历史消息（基于时间戳，获取 timestamp 之前的所有消息）
  */
 const getRelatedHistoryMessages = (
   state: Immutable<AgentState>,
-  lastHistoryMessageId: string
+  timestamp: number
 ): Immutable<HistoryMessage[]> => {
-  // 从后往前找到 lastHistoryMessageId 的索引
-  const lastIndex = findLastIndex(
-    state.historyMessages,
-    (msg) => msg.id === lastHistoryMessageId
+  // 返回 timestamp 之前（包含等于）的所有消息
+  return state.historyMessages.filter(
+    (msg) => msg.timestamp <= timestamp
   );
-
-  // 如果找到了，返回从起点到该索引的所有消息；否则返回所有消息
-  return lastIndex >= 0
-    ? state.historyMessages.slice(0, lastIndex + 1)
-    : state.historyMessages;
 };
 
 /**
@@ -86,10 +80,10 @@ export const createReplyToUserEffectInitializer = (
         throw new Error(`Reply context not found for messageId: ${messageId}`);
       }
 
-      // 收集相关的历史消息
+      // 收集相关的历史消息（基于 decision made 的时间戳）
       const relatedHistoryMessages = getRelatedHistoryMessages(
         state,
-        replyContext.lastHistoryMessageId
+        replyContext.timestamp
       );
 
       // 收集相关的 actions

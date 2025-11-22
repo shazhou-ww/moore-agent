@@ -61,11 +61,11 @@ export const assistantChunkSchema = z.object({
 
 /**
  * Reply To User Context Schema - 回复用户的上下文信息
- * 每个 reply 对应一个 context，包含相关的 history messages 和 action ids
+ * 每个 reply 对应一个 context，包含决策时间戳和相关的 action ids
  */
 export const replyToUserContextSchema = z.object({
   messageId: z.string(), // 用于关联 chunks 和 complete signal
-  lastHistoryMessageId: z.string(), // 最后一条相关的 history message id
+  timestamp: z.number(), // decision made 的时间戳，用于确定相关的历史消息范围
   relatedActionIds: z.array(z.string()), // 相关的 action request ids（已排序）
   chunks: z.array(assistantChunkSchema), // 正在 stream 的 chunks
 });
@@ -81,7 +81,7 @@ export const agentStateSchema = z.object({
   actionDefinitions: z.record(z.string(), actionDefinitionSchema),
 
   // 3. 当前 Agent 已经发起的 actions（合并了 request、response 和 parameter）
-  // key 是 actionRequestId，value 是 Action
+  // key 是 actionId，value 是 Action
   actions: z.record(z.string(), actionSchema),
 
   // 4. Agent 和用户之间往来的历史消息（不包含 Agent 和 action 之间的消息）
@@ -91,7 +91,7 @@ export const agentStateSchema = z.object({
   lastReactionTimestamp: z.number(),
 
   // 6. 正在进行的 reply to user streaming 操作
-  // key 是 messageId（即 hash(lastHistoryMessageId + sorted actionIds)），value 是对应的 context
+  // key 是 messageId，value 是对应的 context
   // 这与 ReplyToUserEffect 的 key 保持一致
   replies: z.record(z.string(), replyToUserContextSchema),
 });
