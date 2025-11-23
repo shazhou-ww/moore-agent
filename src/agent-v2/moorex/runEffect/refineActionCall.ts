@@ -2,7 +2,12 @@ import type { Immutable } from "mutative";
 import type { AgentState } from "../agentState.ts";
 import type { RefineActionCallEffect } from "../agentEffects.ts";
 import type { AgentSignal, ActionRequestRefinedSignal } from "../agentSignal.ts";
-import type { EffectInitializer, RunEffectOptions } from "./types.ts";
+import type {
+  EffectInitializer,
+  RunEffectOptions,
+  ToolDefinition,
+  ToolCall,
+} from "./types.ts";
 import type { Dispatch } from "./effectInitializer.ts";
 import { createEffectInitializer } from "./effectInitializer.ts";
 
@@ -97,6 +102,8 @@ export const createRefineActionCallEffectInitializer = (
   const {
     behavior: { think },
   } = options;
+  const supplementalTools: Record<string, ToolDefinition> = {};
+  const supplementalToolCalls: Record<string, ToolCall> = {};
   
   return createEffectInitializer(
     async (dispatch: Dispatch, isCancelled: () => boolean) => {
@@ -130,6 +137,8 @@ export const createRefineActionCallEffectInitializer = (
       const result = await think(
         getSystemPrompts,
         Array.from(state.historyMessages),
+        supplementalTools,
+        supplementalToolCalls,
         outputSchema,
       );
 

@@ -73,8 +73,11 @@ export const createActionRequestEffectInitializer = (
         return;
       }
 
+      console.log("actionRequest for key", key);
       // 调用 action
       const result = await act(actionId, requestData.actionName, requestData.parameters);
+
+      console.log("result", result);
 
       if (isCancelled()) {
         return;

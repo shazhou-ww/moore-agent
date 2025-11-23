@@ -34,25 +34,26 @@ const parseJsonSafely = (input: string | null | undefined): unknown => {
 };
 
 const buildToolCallArguments = (toolCall: ToolCall): string => {
-  const payload: Record<string, unknown> = {
-    intention: toolCall.intention,
-  };
   const parsedParameters = parseJsonSafely(toolCall.parameters);
-  if (parsedParameters !== undefined) {
-    payload.parameters = parsedParameters;
+  if (parsedParameters === undefined) {
+    return "{}";
   }
-  return JSON.stringify(payload);
+  return typeof parsedParameters === "string"
+    ? parsedParameters
+    : JSON.stringify(parsedParameters);
 };
 
 const buildAssistantToolCallMessage = (
   callId: string,
   toolCall: ToolCall,
 ): OpenAI.Chat.Completions.ChatCompletionMessageParam => {
-  const contentLines = [toolCall.intention, toolCall.parameters]
-    .filter((line) => line && line.trim().length > 0);
+  const content =
+    toolCall.parameters && toolCall.parameters.trim().length > 0
+      ? toolCall.parameters
+      : null;
   return {
     role: "assistant",
-    content: contentLines.length > 0 ? contentLines.join("\n") : null,
+    content,
     tool_calls: [
       {
         id: callId,
@@ -97,19 +98,19 @@ const buildConversationMessages = (
   let orderCounter = timeline.length;
   Object.entries(toolCalls)
     .sort((a, b) => {
-      if (a[1].timestamp === b[1].timestamp) {
+      if (a[1].requestedAt === b[1].requestedAt) {
         return a[0].localeCompare(b[0]);
       }
-      return a[1].timestamp - b[1].timestamp;
+      return a[1].requestedAt - b[1].requestedAt;
     })
     .forEach(([callId, call]) => {
       timeline.push({
-        timestamp: call.timestamp,
+        timestamp: call.requestedAt,
         order: orderCounter++,
         message: buildAssistantToolCallMessage(callId, call),
       });
       timeline.push({
-        timestamp: call.timestamp,
+        timestamp: call.respondedAt,
         order: orderCounter++,
         message: buildToolResultMessage(callId, call),
       });
@@ -172,7 +173,6 @@ export const createThinkFn = (model: LargeLanguageModel): ThinkFn => {
         },
         ...supplementalTools,
       ];
-
       // 调用 OpenAI API（非流式），使用 tool_choice 强制调用函数
       const response = await client.chat.completions.create({
         model: model.model,
@@ -182,6 +182,7 @@ export const createThinkFn = (model: LargeLanguageModel): ThinkFn => {
         tools: requestTools,
         tool_choice: { type: "function", function: { name: "think" } },
       });
+      // log("response", response);
 
       // 从 tool call 中提取结果
       const toolCall = response.choices[0]?.message?.tool_calls?.[0];

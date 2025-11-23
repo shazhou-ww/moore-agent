@@ -1,5 +1,5 @@
 import type { Immutable } from "mutative";
-import type { AgentState, ActionResponse } from "../../agentState.ts";
+import type { AgentState } from "../../agentState.ts";
 import type { IterationState } from "./index.ts";
 
 /**
@@ -27,69 +27,6 @@ const extractAvailableActions = (
 const buildActionsList = (availableActions: Record<string, string>): string => {
   return Object.entries(availableActions)
     .map(([name, description]) => `- ${name}: ${description}`)
-    .join("\n");
-};
-
-/**
- * Get action status
- */
-const getActionStatus = (
-  response: Immutable<ActionResponse> | null,
-): "pending" | "completed" | "cancelled" => {
-  if (!response) {
-    return "pending";
-  }
-  return response.type === "cancelled" ? "cancelled" : "completed";
-};
-
-/**
- * Format single action summary
- */
-const formatActionSummary = (
-  actionId: string,
-  action: Immutable<AgentState["actions"][string]>,
-  includeDetails: boolean,
-): string => {
-  const status = getActionStatus(action.response);
-  let text = `- ID: ${actionId}, Name: ${action.request.actionName}, Intention: ${action.request.intention}, Status: ${status}`;
-
-  if (includeDetails) {
-    const requestDetail = JSON.stringify({
-      actionName: action.request.actionName,
-      intention: action.request.intention,
-      parameters: action.parameter ? JSON.parse(action.parameter) : undefined,
-    });
-    text += `\n  Request: ${requestDetail}`;
-
-    if (action.response) {
-      const responseDetail = JSON.stringify({
-        type: action.response.type,
-        ...(action.response.type === "completed" ? { result: action.response.result } : {}),
-      });
-      text += `\n  Response: ${responseDetail}`;
-    }
-  }
-
-  return text;
-};
-
-/**
- * Build all action summaries text
- */
-const buildActionSummariesText = (
-  state: Immutable<AgentState>,
-  loadedActionDetailIds: Set<string>,
-): string => {
-  return Object.entries(state.actions)
-    .map(([actionId, action]) => {
-      const includeDetails = loadedActionDetailIds.has(actionId);
-
-      return formatActionSummary(
-        actionId,
-        action,
-        includeDetails,
-      );
-    })
     .join("\n");
 };
 
@@ -122,10 +59,6 @@ export const buildSystemPrompt = (
 ) => (funcName: string): string => {
   const availableActions = extractAvailableActions(state);
   const actionsList = buildActionsList(availableActions);
-  const actionSummariesText = buildActionSummariesText(
-    state,
-    iterationState.loadedActionDetailIds,
-  );
 
   const totalMessages = state.historyMessages.length;
   const currentMessages = iterationState.currentHistoryCount;
@@ -147,8 +80,6 @@ Decide the next action based on current state.
 ### Available Actions:
 ${actionsList}
 
-### Running Actions:
-${actionSummariesText || "(none)"}
 ${historyInfo}
 
 ### Decision Priority:

@@ -35,10 +35,10 @@ export type ToolDefinition = {
  */
 export type ToolCall = {
   name: string;
-  intention: string;
   parameters: string;
   result: string;
-  timestamp: number;
+  requestedAt: number;
+  respondedAt: number;
 };
 
 /**

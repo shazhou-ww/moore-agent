@@ -34,28 +34,28 @@ type ReactionContext = {
   unrespondedActions: Record<string, Action>;
 };
 
-const isRecordObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-const parseActionSchema = (schemaText: string): Record<string, unknown> => {
-  try {
-    const parsed = JSON.parse(schemaText);
-    return isRecordObject(parsed) ? parsed : {};
-  } catch {
-    return {};
-  }
+const ACTION_INFO_TOOL: ToolDefinition = {
+  schema: {
+    type: "object",
+    properties: {
+      name: {
+        type: "string",
+        description: "Action name",
+      },
+      intention: {
+        type: "string",
+        description: "Action intention",
+      },
+    },
+    required: ["name", "intention"],
+    additionalProperties: false,
+  },
+  description: "Supplemental information about an action request.",
 };
 
-const buildThinkTools = (state: Immutable<AgentState>): Record<string, ToolDefinition> =>
-  Object.fromEntries(
-    Object.entries(state.actionDefinitions).map(([name, definition]) => [
-      name,
-      {
-        schema: parseActionSchema(definition.schema),
-        description: definition.description,
-      },
-    ]),
-  );
+const buildThinkTools = (_state: Immutable<AgentState>): Record<string, ToolDefinition> => ({
+  action: ACTION_INFO_TOOL,
+});
 
 const buildToolCallResult = (action: Immutable<Action>): string => {
   if (!action.response) {
@@ -64,13 +64,11 @@ const buildToolCallResult = (action: Immutable<Action>): string => {
   if (action.response.type === "cancelled") {
     return JSON.stringify({
       status: "cancelled",
-      timestamp: action.response.timestamp,
     });
   }
   return JSON.stringify({
     status: "completed",
     result: action.response.result,
-    timestamp: action.response.timestamp,
   });
 };
 
@@ -80,16 +78,23 @@ const buildThinkToolCalls = (
 ): Record<string, ToolCall> => {
   const entries = Object.entries(state.actions)
     .filter(([actionId]) => loadedActionDetailIds.has(actionId))
-    .map(([actionId, action]) => [
-      actionId,
-      {
+    .map(([actionId, action]) => {
+      const parameters = JSON.stringify({
         name: action.request.actionName,
         intention: action.request.intention,
-        parameters: action.parameter ?? "",
-        result: buildToolCallResult(action),
-        timestamp: action.request.timestamp,
-      },
-    ]);
+      });
+
+      return [
+        actionId,
+        {
+          name: "action",
+          parameters,
+          result: buildToolCallResult(action),
+          requestedAt: action.request.timestamp,
+          respondedAt: Date.now(),
+        },
+      ] as const;
+    });
 
   return Object.fromEntries(entries);
 };
@@ -347,6 +352,8 @@ export const createReactionEffectInitializer = (
         },
       } = options;
 
+      console.log("reaction for key", key);
+
       // 收集尚未响应的消息和 action responses
       const reactionContext: ReactionContext = collectUnrespondedItems(state);
 
@@ -396,6 +403,8 @@ export const createReactionEffectInitializer = (
           thinkTools,
           thinkToolCalls,
         );
+
+        console.log("decideCall", decideCall);
 
         if (isCancelled()) {
           return;
