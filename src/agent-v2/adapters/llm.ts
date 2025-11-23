@@ -1,8 +1,7 @@
 import OpenAI from "openai";
-import { map, compact } from "lodash";
 import type { LargeLanguageModel } from "../types.ts";
 import type { ThinkFn, SpeakFn, ToolDefinition, ToolCall } from "../moorex/runEffect/types.ts";
-import type { HistoryMessage, Action } from "../moorex/agentState.ts";
+import type { HistoryMessage } from "../moorex/agentState.ts";
 import debug from "debug";
 
 const log = debug("agent-v2:llm");
@@ -225,12 +224,14 @@ export const createSpeakFn = (model: LargeLanguageModel): SpeakFn => {
   return async (
     systemPrompts: string,
     messageWindow: HistoryMessage[],
-    relatedActions: Record<string, Action>,
+    tools: Record<string, ToolDefinition>,
+    toolCalls: Record<string, ToolCall>,
     sentContent: string,
   ): Promise<AsyncGenerator<string>> => {
     log("Calling speak model:", model.model);
     log("Message window size:", messageWindow.length);
-    log("Related actions count:", Object.keys(relatedActions).length);
+    log("supplemental tools:", Object.keys(tools).length);
+    log("supplemental tool calls:", Object.keys(toolCalls).length);
 
     try {
       // 如果有已发送的内容，构建接续提示
@@ -257,36 +258,20 @@ Do not explain anything. Just continue the text directly.
         : systemPrompts;
 
       // 构建消息列表
-      const actionsContext =
-        Object.keys(relatedActions).length > 0
-          ? map(relatedActions, (action, id) => {
-              const params = action.parameter
-                ? JSON.parse(action.parameter)
-                : null;
-              const result =
-                action.response?.type === "completed"
-                  ? action.response.result
-                  : null;
-              return `Action ${id} (${action.request.actionName}): ${action.request.intention}${params ? `\nParameters: ${JSON.stringify(params)}` : ""}${result ? `\nResult: ${result}` : ""}`;
-            }).join("\n\n")
-          : null;
-
-      const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = compact([
-        finalSystemPrompts && {
+      const conversationMessages = buildConversationMessages(messageWindow, toolCalls);
+      const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [];
+      if (finalSystemPrompts) {
+        messages.push({
           role: "system",
           content: finalSystemPrompts,
-        },
-        ...map(messageWindow, (msg) => ({
-          role: msg.type === "user" ? "user" : "assistant",
-          content: msg.content,
-        })),
-        actionsContext && {
-          role: "user",
-          content: `Related actions context:\n${actionsContext}`,
-        },
-      ]) as OpenAI.Chat.Completions.ChatCompletionMessageParam[];
+        });
+      }
+      messages.push(...conversationMessages);
 
       log("Messages:\n\n", JSON.stringify(messages, null, 2));
+      console.log("messages.length", messages.length);
+
+      const supplementalTools = buildSupplementalTools(tools);
 
       // 调用 OpenAI API（流式）
       const stream = await client.chat.completions.create({
@@ -294,6 +279,8 @@ Do not explain anything. Just continue the text directly.
         messages,
         temperature: model.temperature,
         top_p: model.topP,
+        tools: supplementalTools.length > 0 ? supplementalTools : undefined,
+        tool_choice: supplementalTools.length > 0 ? "none" : undefined,
         stream: true,
       });
 

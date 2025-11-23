@@ -32,7 +32,7 @@ export type ReactionEffect = {
  * 输入（从 state 中获取）：
  * - 系统提示词：state.systemPrompts
  * - 相关的历史消息：基于 state.replies[messageId].timestamp 确定（timestamp 之前的所有消息）
- * - 相关的 action requests 和 responses：从 state.replies[messageId].relatedActionIds 确定
+ * - 已完成的 action requests 和 responses：包含所有已获得结果的 actions
  */
 export type ReplyToUserEffect = {
   kind: "reply-to-user";

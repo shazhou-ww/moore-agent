@@ -10,16 +10,12 @@ const handleReplyToUserDecision = (
   timestamp: number,
   state: Immutable<AgentState>,
 ): Immutable<AgentState> => {
-  const { messageId, relatedActionIds } = decision;
-  
-  // 先对 Action Ids 进行排序
-  const sortedActionIds = [...relatedActionIds].sort();
+  const { messageId } = decision;
   
   // 创建 reply context（使用 signal 带来的 messageId 和 timestamp）
   const replyContext: ReplyToUserContext = {
     messageId,
     timestamp, // decision made 的时间戳，用于确定相关的历史消息范围
-    relatedActionIds: sortedActionIds,
     chunks: [],
   };
   

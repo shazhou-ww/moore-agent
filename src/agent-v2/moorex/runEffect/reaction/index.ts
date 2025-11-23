@@ -25,6 +25,7 @@ import {
 import { toJSONSchema } from "zod";
 import { buildSystemPrompt } from "./prompt.ts";
 import { v4 as randomUUID } from "uuid";
+import { buildActionTools, buildActionToolCalls } from "../actionTooling.ts";
 
 /**
  * Reaction 上下文
@@ -32,71 +33,6 @@ import { v4 as randomUUID } from "uuid";
 type ReactionContext = {
   unrespondedUserMessages: HistoryMessage[];
   unrespondedActions: Record<string, Action>;
-};
-
-const ACTION_INFO_TOOL: ToolDefinition = {
-  schema: {
-    type: "object",
-    properties: {
-      name: {
-        type: "string",
-        description: "Action name",
-      },
-      intention: {
-        type: "string",
-        description: "Action intention",
-      },
-    },
-    required: ["name", "intention"],
-    additionalProperties: false,
-  },
-  description: "Supplemental information about an action request.",
-};
-
-const buildThinkTools = (_state: Immutable<AgentState>): Record<string, ToolDefinition> => ({
-  action: ACTION_INFO_TOOL,
-});
-
-const buildToolCallResult = (action: Immutable<Action>): string => {
-  if (!action.response) {
-    return JSON.stringify({ status: "pending" });
-  }
-  if (action.response.type === "cancelled") {
-    return JSON.stringify({
-      status: "cancelled",
-    });
-  }
-  return JSON.stringify({
-    status: "completed",
-    result: action.response.result,
-  });
-};
-
-const buildThinkToolCalls = (
-  state: Immutable<AgentState>,
-  loadedActionDetailIds: Set<string>,
-): Record<string, ToolCall> => {
-  const entries = Object.entries(state.actions)
-    .filter(([actionId]) => loadedActionDetailIds.has(actionId))
-    .map(([actionId, action]) => {
-      const parameters = JSON.stringify({
-        name: action.request.actionName,
-        intention: action.request.intention,
-      });
-
-      return [
-        actionId,
-        {
-          name: "action",
-          parameters,
-          result: buildToolCallResult(action),
-          requestedAt: action.request.timestamp,
-          respondedAt: Date.now(),
-        },
-      ] as const;
-    });
-
-  return Object.fromEntries(entries);
 };
 
 /**
@@ -376,7 +312,7 @@ export const createReactionEffectInitializer = (
         ), // 初始加载未响应的 action 详情
         decision: null,
       };
-      const thinkTools = buildThinkTools(state);
+      const thinkTools = buildActionTools();
 
       // 循环决策，直到做出最终决策
       const totalMessages = state.historyMessages.length;
@@ -386,9 +322,9 @@ export const createReactionEffectInitializer = (
           state,
           iterationState,
         );
-        const thinkToolCalls = buildThinkToolCalls(
-          state,
-          iterationState.loadedActionDetailIds,
+        const thinkToolCalls = buildActionToolCalls(
+          state.actions,
+          (actionId) => iterationState.loadedActionDetailIds.has(actionId),
         );
 
         // 检查是否还有更多 history
@@ -426,5 +362,12 @@ export const createReactionEffectInitializer = (
         iterationState.decision,
         dispatch,
       );
-    }
+    }, {
+      onCancel: () => {
+        console.log("reaction cancelled for key", key);
+      },
+      onError: (error) => {
+        console.error("reaction error for key", key, error);
+      },
+    },
   );

@@ -60,7 +60,8 @@ export type ThinkFn = (
 export type SpeakFn = (
   systemPrompts: string,
   messageWindow: HistoryMessage[],
-  relatedActions: Record<string, Action>, // 相关的 actions，key 是 actionId
+  tools: Record<string, ToolDefinition>,
+  toolCalls: Record<string, ToolCall>,
   sentContent: string, // 已发送的内容，用于接续回复，如果没有则传空字符串
 ) => Promise<AsyncGenerator<string>>;
 

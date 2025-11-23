@@ -1,4 +1,3 @@
-import { pick } from "lodash";
 import type { Immutable } from "mutative";
 import type { AgentState, HistoryMessage, Action } from "../agentState.ts";
 import type { ReplyToUserEffect } from "../agentEffects.ts";
@@ -10,6 +9,18 @@ import type {
 import type { EffectInitializer, RunEffectOptions } from "./types.ts";
 import type { Dispatch } from "./effectInitializer.ts";
 import { createEffectInitializer } from "./effectInitializer.ts";
+import { buildActionTools, buildActionToolCalls } from "./actionTooling.ts";
+
+const ACTION_INFO_TOOLS = buildActionTools();
+
+const collectRespondedActions = (
+  actions: Immutable<AgentState["actions"]>,
+): Record<string, Action> =>
+  Object.fromEntries(
+    Object.entries(actions).filter(
+      ([, action]) => action.response !== null,
+    ),
+  ) as Record<string, Action>;
 
 /**
  * 收集相关的历史消息（基于时间戳，获取 timestamp 之前的所有消息）
@@ -86,20 +97,20 @@ export const createReplyToUserEffectInitializer = (
         replyContext.timestamp
       );
 
-      // 收集相关的 actions
-      const relatedActions = pick(
-        state.actions,
-        replyContext.relatedActionIds
-      ) as Record<string, Action>;
+      // 收集已获得结果的 actions
+      const respondedActions = collectRespondedActions(state.actions);
 
       // 获取已发送的内容（从 chunks 中提取），如果没有则传空字符串
       const sentContent = replyContext.chunks.map((chunk) => chunk.content).join("")
+
+      const supplementalToolCalls = buildActionToolCalls(respondedActions);
 
       // 调用流式 LLM（speak）：向用户解释说明
       const chunkGenerator = await speak(
         state.systemPrompts,
         Array.from(relatedHistoryMessages),
-        relatedActions,
+        ACTION_INFO_TOOLS,
+        supplementalToolCalls,
         sentContent
       );
       for await (const chunk of chunkGenerator) {

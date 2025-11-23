@@ -31,6 +31,38 @@ const buildActionsList = (availableActions: Record<string, string>): string => {
 };
 
 /**
+ * Derive current action status for summary table
+ */
+const getActionStatus = (
+  action: Immutable<AgentState["actions"][string]>,
+): "pending" | "completed" | "cancelled" => {
+  const response = action.response;
+  if (!response) {
+    return "pending";
+  }
+  return response.type === "cancelled" ? "cancelled" : "completed";
+};
+
+/**
+ * Build running actions table text
+ */
+const buildRunningActionsTable = (state: Immutable<AgentState>): string => {
+  const entries = Object.entries(state.actions);
+  if (entries.length === 0) {
+    return "(none)";
+  }
+
+  const header = "| ID | Name | Intention | Status |";
+  const separator = "| --- | --- | --- | --- |";
+  const rows = entries.map(([actionId, action]) => {
+    const status = getActionStatus(action);
+    return `| ${actionId} | ${action.request.actionName} | ${action.request.intention} | ${status} |`;
+  });
+
+  return [header, separator, ...rows].join("\n");
+};
+
+/**
  * Build history info hint
  */
 const buildHistoryInfo = (
@@ -59,6 +91,7 @@ export const buildSystemPrompt = (
 ) => (funcName: string): string => {
   const availableActions = extractAvailableActions(state);
   const actionsList = buildActionsList(availableActions);
+  const runningActionsText = buildRunningActionsTable(state);
 
   const totalMessages = state.historyMessages.length;
   const currentMessages = iterationState.currentHistoryCount;
@@ -80,6 +113,10 @@ Decide the next action based on current state.
 ### Available Actions:
 ${actionsList}
 
+### Running Actions:
+${runningActionsText}
+
+### History Info
 ${historyInfo}
 
 ### Decision Priority:
@@ -120,8 +157,7 @@ Reply when you have all information:
 ${codeBlockJson({ 
   type: "decision-made", 
   decision: { 
-    type: "reply-to-user", 
-    relatedActionIds: ["action-id-1"] 
+    type: "reply-to-user" 
   } 
 })}
 

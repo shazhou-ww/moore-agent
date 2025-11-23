@@ -61,11 +61,9 @@ export const assistantMessageCompleteSignalSchema = z.object({
 
 /**
  * Reply To User Decision Schema - 回复用户的决策
- * 包含相关的 action ids
  */
 export const replyToUserDecisionSchema = z.object({
   type: z.literal("reply-to-user"),
-  relatedActionIds: z.array(z.string()), // 相关的 action request ids（已排序）
 });
 
 /**

@@ -61,12 +61,11 @@ export const assistantChunkSchema = z.object({
 
 /**
  * Reply To User Context Schema - 回复用户的上下文信息
- * 每个 reply 对应一个 context，包含决策时间戳和相关的 action ids
+ * 每个 reply 对应一个 context，包含决策时间戳
  */
 export const replyToUserContextSchema = z.object({
   messageId: z.string(), // 用于关联 chunks 和 complete signal
   timestamp: z.number(), // decision made 的时间戳，用于确定相关的历史消息范围
-  relatedActionIds: z.array(z.string()), // 相关的 action request ids（已排序）
   chunks: z.array(assistantChunkSchema), // 正在 stream 的 chunks
 });
 
