@@ -8,7 +8,13 @@ import type {
   ReactionDecision,
   ReactionDecisionExt,
 } from "../../agentSignal.ts";
-import type { EffectInitializer, RunEffectOptions, ThinkFn } from "../types.ts";
+import type {
+  EffectInitializer,
+  RunEffectOptions,
+  ThinkFn,
+  ToolDefinition,
+  ToolCall,
+} from "../types.ts";
 import type { Dispatch } from "../effectInitializer.ts";
 import { createEffectInitializer } from "../effectInitializer.ts";
 import {
@@ -26,6 +32,66 @@ import { v4 as randomUUID } from "uuid";
 type ReactionContext = {
   unrespondedUserMessages: HistoryMessage[];
   unrespondedActions: Record<string, Action>;
+};
+
+const isRecordObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const parseActionSchema = (schemaText: string): Record<string, unknown> => {
+  try {
+    const parsed = JSON.parse(schemaText);
+    return isRecordObject(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+const buildThinkTools = (state: Immutable<AgentState>): Record<string, ToolDefinition> =>
+  Object.fromEntries(
+    Object.entries(state.actionDefinitions).map(([name, definition]) => [
+      name,
+      {
+        schema: parseActionSchema(definition.schema),
+        description: definition.description,
+      },
+    ]),
+  );
+
+const buildToolCallResult = (action: Immutable<Action>): string => {
+  if (!action.response) {
+    return JSON.stringify({ status: "pending" });
+  }
+  if (action.response.type === "cancelled") {
+    return JSON.stringify({
+      status: "cancelled",
+      timestamp: action.response.timestamp,
+    });
+  }
+  return JSON.stringify({
+    status: "completed",
+    result: action.response.result,
+    timestamp: action.response.timestamp,
+  });
+};
+
+const buildThinkToolCalls = (
+  state: Immutable<AgentState>,
+  loadedActionDetailIds: Set<string>,
+): Record<string, ToolCall> => {
+  const entries = Object.entries(state.actions)
+    .filter(([actionId]) => loadedActionDetailIds.has(actionId))
+    .map(([actionId, action]) => [
+      actionId,
+      {
+        name: action.request.actionName,
+        intention: action.request.intention,
+        parameters: action.parameter ?? "",
+        result: buildToolCallResult(action),
+        timestamp: action.request.timestamp,
+      },
+    ]);
+
+  return Object.fromEntries(entries);
 };
 
 /**
@@ -141,6 +207,8 @@ const performIterationDecision = async (
   messageWindow: HistoryMessage[],
   think: ThinkFn,
   hasMoreHistory: boolean,
+  tools: Record<string, ToolDefinition>,
+  toolCalls: Record<string, ToolCall>,
 ): Promise<IterationDecision> => {
   // 根据是否有更多 history 动态生成 schema
   const dynamicSchema = createIterationDecisionSchema(hasMoreHistory);
@@ -150,6 +218,8 @@ const performIterationDecision = async (
   const result = await think(
     getSystemPrompts,
     messageWindow,
+    tools,
+    toolCalls,
     iterationDecisionOutputSchema
   );
 
@@ -299,6 +369,7 @@ export const createReactionEffectInitializer = (
         ), // 初始加载未响应的 action 详情
         decision: null,
       };
+      const thinkTools = buildThinkTools(state);
 
       // 循环决策，直到做出最终决策
       const totalMessages = state.historyMessages.length;
@@ -307,6 +378,10 @@ export const createReactionEffectInitializer = (
         const { getSystemPrompts: getSystemPrompt, messageWindow } = prepareIterationContext(
           state,
           iterationState,
+        );
+        const thinkToolCalls = buildThinkToolCalls(
+          state,
+          iterationState.loadedActionDetailIds,
         );
 
         // 检查是否还有更多 history
@@ -318,6 +393,8 @@ export const createReactionEffectInitializer = (
           messageWindow,
           think,
           hasMoreHistory,
+          thinkTools,
+          thinkToolCalls,
         );
 
         if (isCancelled()) {

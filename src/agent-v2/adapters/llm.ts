@@ -1,11 +1,129 @@
 import OpenAI from "openai";
 import { map, compact } from "lodash";
 import type { LargeLanguageModel } from "../types.ts";
-import type { ThinkFn, SpeakFn } from "../moorex/runEffect/types.ts";
+import type { ThinkFn, SpeakFn, ToolDefinition, ToolCall } from "../moorex/runEffect/types.ts";
 import type { HistoryMessage, Action } from "../moorex/agentState.ts";
 import debug from "debug";
 
 const log = debug("agent-v2:llm");
+const INFO_TOOL_PREFIX = "info_";
+
+const prefixToolName = (name: string): string => `${INFO_TOOL_PREFIX}${name}`;
+
+const buildSupplementalTools = (
+  toolDefinitions: Record<string, ToolDefinition>,
+): OpenAI.Chat.Completions.ChatCompletionTool[] =>
+  Object.entries(toolDefinitions).map(([name, definition]) => ({
+    type: "function",
+    function: {
+      name: prefixToolName(name),
+      description: definition.description,
+      parameters: definition.schema,
+    },
+  }));
+
+const parseJsonSafely = (input: string | null | undefined): unknown => {
+  if (!input) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(input);
+  } catch {
+    return input;
+  }
+};
+
+const buildToolCallArguments = (toolCall: ToolCall): string => {
+  const payload: Record<string, unknown> = {
+    intention: toolCall.intention,
+  };
+  const parsedParameters = parseJsonSafely(toolCall.parameters);
+  if (parsedParameters !== undefined) {
+    payload.parameters = parsedParameters;
+  }
+  return JSON.stringify(payload);
+};
+
+const buildAssistantToolCallMessage = (
+  callId: string,
+  toolCall: ToolCall,
+): OpenAI.Chat.Completions.ChatCompletionMessageParam => {
+  const contentLines = [toolCall.intention, toolCall.parameters]
+    .filter((line) => line && line.trim().length > 0);
+  return {
+    role: "assistant",
+    content: contentLines.length > 0 ? contentLines.join("\n") : null,
+    tool_calls: [
+      {
+        id: callId,
+        type: "function",
+        function: {
+          name: prefixToolName(toolCall.name),
+          arguments: buildToolCallArguments(toolCall),
+        },
+      },
+    ],
+  };
+};
+
+const buildToolResultMessage = (
+  callId: string,
+  toolCall: ToolCall,
+): OpenAI.Chat.Completions.ChatCompletionMessageParam => ({
+  role: "tool",
+  content: toolCall.result || "",
+  tool_call_id: callId,
+});
+
+const buildConversationMessages = (
+  messageWindow: HistoryMessage[],
+  toolCalls: Record<string, ToolCall>,
+): OpenAI.Chat.Completions.ChatCompletionMessageParam[] => {
+  type TimelineEntry = {
+    timestamp: number;
+    order: number;
+    message: OpenAI.Chat.Completions.ChatCompletionMessageParam;
+  };
+
+  const timeline: TimelineEntry[] = messageWindow.map((msg, index) => ({
+    timestamp: msg.timestamp,
+    order: index,
+    message: {
+      role: msg.type === "user" ? "user" : "assistant",
+      content: msg.content,
+    },
+  }));
+
+  let orderCounter = timeline.length;
+  Object.entries(toolCalls)
+    .sort((a, b) => {
+      if (a[1].timestamp === b[1].timestamp) {
+        return a[0].localeCompare(b[0]);
+      }
+      return a[1].timestamp - b[1].timestamp;
+    })
+    .forEach(([callId, call]) => {
+      timeline.push({
+        timestamp: call.timestamp,
+        order: orderCounter++,
+        message: buildAssistantToolCallMessage(callId, call),
+      });
+      timeline.push({
+        timestamp: call.timestamp,
+        order: orderCounter++,
+        message: buildToolResultMessage(callId, call),
+      });
+    });
+
+  return timeline
+    .sort((a, b) => {
+      if (a.timestamp === b.timestamp) {
+        return a.order - b.order;
+      }
+      return a.timestamp - b.timestamp;
+    })
+    .map((entry) => entry.message);
+};
 
 /**
  * 创建 ThinkFn（非流式调用，返回 JSON 字符串）
@@ -19,29 +137,31 @@ export const createThinkFn = (model: LargeLanguageModel): ThinkFn => {
   return async (
     getSystemPrompts: (funcName: string) => string,
     messageWindow: HistoryMessage[],
+    tools: Record<string, ToolDefinition>,
+    toolCalls: Record<string, ToolCall>,
     outputSchema: Record<string, unknown>,
   ): Promise<string> => {
     log("Calling think model:", model.model);
     log("message window size:", messageWindow.length);
-
+    log("supplemental tools:", Object.keys(tools).length);
+    log("supplemental tool calls:", Object.keys(toolCalls).length);
 
     try {
       // 构建消息列表
       const systemPrompt = getSystemPrompts("think");
-      // log("System prompt:\n\n", systemPrompt);
-      const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = compact([
-        systemPrompt && {
+      const conversationMessages = buildConversationMessages(messageWindow, toolCalls);
+      const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [];
+      if (systemPrompt) {
+        messages.push({
           role: "system",
           content: systemPrompt,
-        },
-        ...map(messageWindow, (msg) => ({
-          role: msg.type === "user" ? "user" : "assistant",
-          content: msg.content,
-        })),
-      ]) as OpenAI.Chat.Completions.ChatCompletionMessageParam[];
+        });
+      }
+      messages.push(...conversationMessages);
 
       // 定义 tool，使用 outputSchema 作为参数 schema
-      const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
+      const supplementalTools = buildSupplementalTools(tools);
+      const requestTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
         {
           type: "function",
           function: {
@@ -50,6 +170,7 @@ export const createThinkFn = (model: LargeLanguageModel): ThinkFn => {
             parameters: outputSchema,
           },
         },
+        ...supplementalTools,
       ];
 
       // 调用 OpenAI API（非流式），使用 tool_choice 强制调用函数
@@ -58,7 +179,7 @@ export const createThinkFn = (model: LargeLanguageModel): ThinkFn => {
         messages,
         temperature: model.temperature,
         top_p: model.topP,
-        tools,
+        tools: requestTools,
         tool_choice: { type: "function", function: { name: "think" } },
       });
 

@@ -23,12 +23,33 @@ export type LLMTool = {
 };
 
 /**
+ * Think 模块附加工具定义
+ */
+export type ToolDefinition = {
+  schema: Record<string, unknown>;
+  description: string;
+};
+
+/**
+ * Think 模块附加 tool call 定义
+ */
+export type ToolCall = {
+  name: string;
+  intention: string;
+  parameters: string;
+  result: string;
+  timestamp: number;
+};
+
+/**
  * 非流式调用大模型函数类型（think）
  * 用于让 LLM 思考特定问题，返回符合指定 schema 的 JSON 字符串
  */
 export type ThinkFn = (
   getSystemPrompts: (funcName: string) => string,
   messageWindow: HistoryMessage[],
+  tools: Record<string, ToolDefinition>,
+  toolCalls: Record<string, ToolCall>,
   outputSchema: Record<string, unknown>, // JSON Schema，限定输出格式
 ) => Promise<string>; // 返回符合 outputSchema 的 JSON 字符串
 
